@@ -1,4 +1,4 @@
-package rtn_01;
+package automotivetdmanetwork.switch;
 
 simple RelayUnit {
     parameters:

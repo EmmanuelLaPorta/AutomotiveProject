@@ -4,19 +4,22 @@ Define_Module(AppDispatcher);
 
 void AppDispatcher::initialize()
 {
-    // TODO - Generated method body
+    // Nessuna inizializzazione necessaria
 }
 
 void AppDispatcher::handleMessage(cMessage *msg)
 {
-    /*
-     * Riceve un pacchetto da un'applicazione,
-     * lo inoltra a lowerLayerOut.
-     *
-     * Riceve un pacchetto dalla rete, lo inoltra
-     * a tutti gli upperLayerOut. I gate superiori sono
-     * un vettore di gate.
-     *
-     * Inoltrare ad ogni gate superiore solo il duplicato.
-     */
+    if(msg->getArrivalGate()->isName("upperLayerIn")) {
+        // Messaggio da applicazione -> invia alla rete
+        send(msg, "lowerLayerOut");
+        return;
+    }
+
+    // Messaggio dalla rete -> broadcast a tutte le applicazioni
+    int numApps = gateSize("upperLayerOut");
+    for(int i = 0; i < numApps; i++) {
+        cMessage *copy = msg->dup();
+        send(copy, "upperLayerOut", i);
+    }
+    delete msg;
 }

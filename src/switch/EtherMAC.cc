@@ -1,5 +1,5 @@
 #include "EtherMAC.h"
-#include "EthernetFrame_m.h"
+#include "../messages/EthernetFrame_m.h"
 
 Define_Module(EtherMAC);
 
@@ -8,7 +8,7 @@ void EtherMAC::initialize()
     txstate = TX_STATE_IDLE;
     rxbuf = nullptr;
     datarate = par("datarate");
-    txqueue = cPacketQueue();//Aggiungere comparator per non fifo
+    txqueue = cPacketQueue();
     ifgdur = 96.0/(double)datarate;
 
     cValueArray *vlanArray = check_and_cast<cValueArray*>(par("vlans").objectValue());
@@ -58,7 +58,7 @@ void EtherMAC::handleMessage(cMessage *msg)
         return;
     }
 
-    //Arriva da channelIn
+    // Arriva da channelIn
     if(rxbuf != nullptr) {
         error("Non possono esserci due ricezioni contemporanee!");
     }
@@ -68,10 +68,6 @@ void EtherMAC::handleMessage(cMessage *msg)
     scheduleAt(simTime()+rxdur, rxtim);
 }
 
-/**
- * Ritorna true se la frame deve essere droppata
- * a causa del vlan id, altrimenti false
- */
 bool EtherMAC::vlanFilter(cPacket *pkt) {
     if(vlans.size() == 0) {
         return false;
@@ -89,7 +85,6 @@ bool EtherMAC::vlanFilter(cPacket *pkt) {
     }
 
     return true;
-
 }
 
 void EtherMAC::startTransmission() {

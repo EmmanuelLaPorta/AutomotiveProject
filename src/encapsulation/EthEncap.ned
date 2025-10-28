@@ -1,10 +1,10 @@
-package rtn_01;
+package automotivetdmanetwork.encapsulation;
 
 simple EthEncap
 {
     parameters:
     	@display("i=block/layer");
-    	string address; //Indirizzo mac della porta
+    	string address; // Indirizzo MAC della porta
     gates:
         output lowerLayerOut;
         input lowerLayerIn;

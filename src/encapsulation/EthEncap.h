@@ -1,5 +1,5 @@
-#ifndef __RTN_01_ETHENCAP_H_
-#define __RTN_01_ETHENCAP_H_
+#ifndef __AUTOMOTIVETDMANETWORK_ETHENCAP_H_
+#define __AUTOMOTIVETDMANETWORK_ETHENCAP_H_
 
 #include <omnetpp.h>
 

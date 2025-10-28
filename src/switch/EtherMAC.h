@@ -1,5 +1,5 @@
-#ifndef __RTN_01_ETHERMAC_H_
-#define __RTN_01_ETHERMAC_H_
+#ifndef __AUTOMOTIVETDMANETWORK_ETHERMAC_H_
+#define __AUTOMOTIVETDMANETWORK_ETHERMAC_H_
 
 #include <omnetpp.h>
 

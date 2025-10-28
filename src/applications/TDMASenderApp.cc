@@ -1,60 +1,44 @@
-#include "PeriodicTrafficGen.h"
-#include "AppPackets_m.h"
-#include "EthernetFrame_m.h"
+#include "TDMASenderApp.h"
+#include "../messages/AppPackets_m.h"
+#include "../messages/EthernetFrame_m.h"
 
-Define_Module(PeriodicTrafficGen);
+Define_Module(TDMASenderApp);
 
-void PeriodicTrafficGen::initialize()
+void TDMASenderApp::initialize()
 {
     period = par("period");
-    startTime = par("startTime");
+    tdmaOffset = par("tdmaOffset");
     name = par("name").str();
     payloadSize = par("payloadSize");
     burstSize = par("burstSize");
     destAddr = par("destAddr").str();
     srcAddr = par("srcAddr").str();
 
-    if(startTime > 0) {
+    // Schedule primo invio con offset TDMA
+    simtime_t startTime = tdmaOffset;
+    if(startTime >= 0) {
         cMessage *timer = new cMessage("TxTimer");
         scheduleAt(startTime, timer);
     }
 }
 
-void PeriodicTrafficGen::handleMessage(cMessage *msg)
+void TDMASenderApp::handleMessage(cMessage *msg)
 {
     if(msg->isSelfMessage()) {
         if(strcmp(msg->getName(), "TxTimer") == 0) {
             transmitPacket();
-            scheduleAt(simTime()+par("period"), msg);
+            scheduleAt(simTime() + period, msg);
             return;
         }
 
-        error("E' arrivato un self message non previsto");
+        error("Arrivato un self message non previsto");
     }
 
-    DataPacket *pkt = check_and_cast<DataPacket *>(msg);
-    if(strcmp(pkt->getName(), name.c_str()) != 0) {
-        delete pkt;
-        return;
-    }
-
-
-    EV_DEBUG << "Arrivato pacchetto no. " << pkt->getPktNumber()
-            << ", di " << pkt->getBurstSize() << endl;
-    simtime_t delay = simTime() - pkt->getGenTime();
-
-    simsignal_t sig = registerSignal("E2EDelay");
-    emit(sig, delay);
-
-    if(pkt->getPktNumber() == pkt->getBurstSize()) {
-        sig = registerSignal("E2EBurstDelay");
-        emit(sig, delay);
-    }
-
-    delete pkt;
+    // Questo modulo invia solo, non riceve
+    error("TDMASenderApp non dovrebbe ricevere messaggi dalla rete");
 }
 
-void PeriodicTrafficGen::transmitPacket() {
+void TDMASenderApp::transmitPacket() {
     DataPacket *pkt = new DataPacket(name.c_str());
     pkt->setByteLength(payloadSize);
     pkt->setGenTime(simTime());
