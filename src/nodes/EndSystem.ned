@@ -24,7 +24,7 @@ module EndSystem
             @display("p=200,150");
         }
         ethEncap: EthEncap {
-            address = macAddress;
+            address = parent.macAddress;
             @display("p=200,250");
         }
         mac: EtherMAC {
@@ -35,20 +35,20 @@ module EndSystem
         for i=0..numSenders-1 {
             senderApp[i].lowerLayerOut --> dispatcher.upperLayerIn++;
         }
-        
+
         // Dispatcher -> Receivers
         for i=0..numReceivers-1 {
             dispatcher.upperLayerOut++ --> receiverApp[i].lowerLayerIn;
         }
-        
+
         // Dispatcher <-> EthEncap
         dispatcher.lowerLayerOut --> ethEncap.upperLayerIn;
         dispatcher.lowerLayerIn <-- ethEncap.upperlayerOut;
-        
+
         // EthEncap <-> MAC
         ethEncap.lowerLayerOut --> mac.upperLayerIn;
         ethEncap.lowerLayerIn <-- mac.upperLayerOut;
-        
+
         // MAC <-> Canale esterno
         mac.channelOut --> ethg$o;
         mac.channelIn <-- ethg$i;
