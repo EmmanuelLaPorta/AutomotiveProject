@@ -1,5 +1,6 @@
 import automotivetdmanetwork.nodes.EndSystem;
 import automotivetdmanetwork.switch.EtherSwitch;
+import automotivetdmanetwork.scheduler.TDMAScheduler;
 import ned.DatarateChannel;
 
 @license(LGPL);
@@ -17,6 +18,12 @@ network AutomotiveTDMANetwork
         @display("bgb=1200,800");
 
     submodules:
+	
+	    // ===== SCHEDULER TDMA =====
+        tdmaScheduler: TDMAScheduler {
+            @display("p=600,50;i=block/control");
+        }
+
         // ===== SWITCH 1 - Anteriore Sinistro =====
         switch1: EtherSwitch {
             portCount = 8; // 6 nodi + 2 switch (switch2 e switch3)
