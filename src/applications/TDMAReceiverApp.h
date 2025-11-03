@@ -12,6 +12,10 @@ class TDMAReceiverApp : public cSimpleModule {
     virtual void handleMessage(cMessage *msg) override;
 
     string name;
+    
+    // ✅ NUOVO: Per calcolo jitter
+    simtime_t lastDelay;
+    bool firstPacket;
 };
 
 #endif

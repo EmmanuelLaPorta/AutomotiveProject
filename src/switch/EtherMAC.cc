@@ -10,7 +10,7 @@ void EtherMAC::initialize()
     rxbuf = nullptr;
     datarate = par("datarate");
     txqueue = cPacketQueue();
-    rxqueue = cPacketQueue();  // ✅ NUOVA CODA RX
+    rxqueue = cPacketQueue();
     ifgdur = 96.0/(double)datarate;
 
     // Statistiche per debug
@@ -23,6 +23,10 @@ void EtherMAC::initialize()
     for (int i = 0; i < vlanArray->size(); ++i) {
         vlans.push_back((int)vlanArray->get(i).intValue());
     }
+    
+    // ✅ NUOVO: Emetti stato iniziale code (entrambe vuote)
+    emit(registerSignal("txQueueLength"), 0);
+    emit(registerSignal("rxQueueLength"), 0);
 }
 
 void EtherMAC::handleMessage(cMessage *msg)
@@ -53,9 +57,12 @@ void EtherMAC::handleMessage(cMessage *msg)
             
             rxstate = RX_STATE_IDLE;
             
-            // ✅ Processa il prossimo pacchetto in coda RX se presente
+            // Processa il prossimo pacchetto in coda RX se presente
             if(rxqueue.getLength() > 0) {
                 startReception();
+            } else {
+                // ✅ Emetti lunghezza coda RX (ora vuota)
+                emit(registerSignal("rxQueueLength"), 0);
             }
         }
         return;
@@ -73,9 +80,13 @@ void EtherMAC::handleMessage(cMessage *msg)
 
         txqueue.insert(pkt);
         
+        // ✅ NUOVO: Emetti lunghezza coda TX dopo insert
+        int txQLen = txqueue.getLength();
+        emit(registerSignal("txQueueLength"), txQLen);
+        
         // Traccia dimensione massima coda TX
-        if(txqueue.getLength() > maxTxQueueSize) {
-            maxTxQueueSize = txqueue.getLength();
+        if(txQLen > maxTxQueueSize) {
+            maxTxQueueSize = txQLen;
         }
 
         if(txstate == TX_STATE_IDLE) {
@@ -85,15 +96,19 @@ void EtherMAC::handleMessage(cMessage *msg)
     }
 
     // ===== RICEZIONE (da canale) =====
-    // ✅ GESTIONE COLLISIONI: Se stiamo già ricevendo, metti in coda
+    // Gestione collisioni: se stiamo già ricevendo, metti in coda
     if(rxstate != RX_STATE_IDLE) {
         EV_WARN << "Collisione in ricezione! Pacchetto accodato (rxqueue=" 
                 << rxqueue.getLength() << ")" << endl;
         rxqueue.insert(pkt);
         
+        // ✅ NUOVO: Emetti lunghezza coda RX dopo insert
+        int rxQLen = rxqueue.getLength();
+        emit(registerSignal("rxQueueLength"), rxQLen);
+        
         // Traccia dimensione massima coda RX
-        if(rxqueue.getLength() > maxRxQueueSize) {
-            maxRxQueueSize = rxqueue.getLength();
+        if(rxQLen > maxRxQueueSize) {
+            maxRxQueueSize = rxQLen;
         }
         return;
     }
@@ -115,6 +130,10 @@ void EtherMAC::startReception()
     }
 
     rxbuf = check_and_cast<cPacket*>(rxqueue.pop());
+    
+    // ✅ NUOVO: Emetti lunghezza coda RX dopo pop
+    emit(registerSignal("rxQueueLength"), rxqueue.getLength());
+    
     rxstate = RX_STATE_RX;
     
     simtime_t rxdur = (double)rxbuf->getBitLength()/(double)datarate;
@@ -146,10 +165,16 @@ bool EtherMAC::vlanFilter(cPacket *pkt) {
 void EtherMAC::startTransmission() {
     if(txqueue.getLength() == 0) {
         txstate = TX_STATE_IDLE;
+        // ✅ NUOVO: Emetti lunghezza coda TX (ora vuota)
+        emit(registerSignal("txQueueLength"), 0);
         return;
     }
 
     cPacket *pkt = txqueue.pop();
+    
+    // ✅ NUOVO: Emetti lunghezza coda TX dopo pop
+    emit(registerSignal("txQueueLength"), txqueue.getLength());
+    
     simtime_t txdur = (double)pkt->getBitLength()/(double)datarate;
     send(pkt, "channelOut");
     cMessage *txtim = new cMessage("TxTimer");
