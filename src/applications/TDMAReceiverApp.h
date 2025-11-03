@@ -13,7 +13,7 @@ class TDMAReceiverApp : public cSimpleModule {
 
     string name;
     
-    // ✅ NUOVO: Per calcolo jitter
+    // ✅ CORRETTO: Per calcolo jitter
     simtime_t lastDelay;
     bool firstPacket;
 };

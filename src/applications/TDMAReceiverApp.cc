@@ -6,6 +6,10 @@ Define_Module(TDMAReceiverApp);
 void TDMAReceiverApp::initialize()
 {
     name = par("name").str();
+    
+    // ✅ CORRETTO: Inizializzazione variabili per jitter
+    lastDelay = 0;
+    firstPacket = true;
 }
 
 void TDMAReceiverApp::handleMessage(cMessage *msg)
@@ -23,13 +27,22 @@ void TDMAReceiverApp::handleMessage(cMessage *msg)
     
     simtime_t delay = simTime() - pkt->getGenTime();
 
-    // Emetti statistiche
-    simsignal_t sig = registerSignal("E2EDelay");
-    emit(sig, delay);
+    // ✅ CORRETTO: Calcolo jitter
+    if(!firstPacket) {
+        simtime_t jitter = fabs((delay - lastDelay).dbl());
+        emit(registerSignal("jitter"), jitter);
+    }
+    
+    // Aggiorna per il prossimo pacchetto
+    lastDelay = delay;
+    firstPacket = false;
 
+    // Emetti statistiche E2E Delay
+    emit(registerSignal("E2EDelay"), delay);
+
+    // Se è l'ultimo frammento del burst, emetti anche E2EBurstDelay
     if(pkt->getPktNumber() == pkt->getBurstSize()) {
-        sig = registerSignal("E2EBurstDelay");
-        emit(sig, delay);
+        emit(registerSignal("E2EBurstDelay"), delay);
     }
 
     delete pkt;

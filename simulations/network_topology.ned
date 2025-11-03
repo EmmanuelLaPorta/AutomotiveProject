@@ -26,25 +26,25 @@ network AutomotiveTDMANetwork
 
         // ===== SWITCH 1 - Anteriore Sinistro =====
         switch1: EtherSwitch {
-            portCount = 8; // 6 nodi + 2 switch (switch2 e switch3)
+            portCount = 8;
             @display("p=300,250;i=device/switch");
         }
 
         // ===== SWITCH 2 - Anteriore Destro =====
         switch2: EtherSwitch {
-            portCount = 6; // 4 nodi + 2 switch (switch1 e switch4)
+            portCount = 6;
             @display("p=700,250;i=device/switch");
         }
 
         // ===== SWITCH 3 - Posteriore Sinistro =====
         switch3: EtherSwitch {
-            portCount = 6; // 4 nodi + 2 switch (switch1 e switch4)
+            portCount = 6;
             @display("p=300,550;i=device/switch");
         }
 
         // ===== SWITCH 4 - Posteriore Destro =====
         switch4: EtherSwitch {
-            portCount = 5; // 3 nodi + 2 switch (switch2 e switch3)
+            portCount = 6;  // AGGIORNATO: +1 per RS1
             @display("p=700,550;i=device/switch");
         }
 
@@ -54,14 +54,14 @@ network AutomotiveTDMANetwork
         // FLOW 7: TLM → HU, CU (2 destinazioni multicast)
         TLM: EndSystem {
             macAddress = "00:00:00:00:00:01";
-            numSenders = 2;    // AGGIORNATO: 2 sender per flow 7 (HU + CU)
+            numSenders = 2;
             numReceivers = 0;
             @display("p=150,100");
         }
 
-        // USS1: Ultrasonic Sensor 1 (parcheggio)
-        // FLOW 3: USS1 → CU
-        USS1: EndSystem {
+        // US1: Ultrasonic Sensor 1 (RINOMINATO da USS1)
+        // FLOW 3: US1 → CU
+        US1: EndSystem {
             macAddress = "00:00:00:00:00:02";
             numSenders = 1;
             numReceivers = 0;
@@ -77,9 +77,9 @@ network AutomotiveTDMANetwork
             @display("p=350,100");
         }
 
-        // FC: Front Camera (60 FPS)
-        // FLOW 5: FC → HU (video RAW 178500B)
-        FC: EndSystem {
+        // CM1: Front Camera (RINOMINATO da FC)
+        // FLOW 5: CM1 → HU (video RAW 178500B)
+        CM1: EndSystem {
             macAddress = "00:00:00:00:00:04";
             numSenders = 1;
             numReceivers = 0;
@@ -96,11 +96,11 @@ network AutomotiveTDMANetwork
         }
 
         // HU: Head Unit (display principale)
-        // Riceve da: CU (flow4), FC (flow5), TLM (flow7), RC (flow8)
+        // Riceve da: CU (flow4), CM1 (flow5), TLM (flow7), RC (flow8)
         HU: EndSystem {
             macAddress = "00:00:00:00:00:06";
             numSenders = 0;
-            numReceivers = 4;  // AGGIORNATO: CU, FC, TLM, RC
+            numReceivers = 4;
             @display("p=250,400");
         }
 
@@ -108,11 +108,11 @@ network AutomotiveTDMANetwork
 
         // CU: Control Unit (centralina principale)
         // FLOW 4: CU → HU (10500B frammentati)
-        // Riceve da: LD1 (flow1), LD2 (flow1b), USS1-4 (flow3), TLM (flow7)
+        // Riceve da: LD1 (flow1), LD2 (flow1b), US1-4 (flow3), TLM (flow7)
         CU: EndSystem {
             macAddress = "00:00:00:00:00:07";
-            numSenders = 1;    // Flow 4: CU → HU
-            numReceivers = 7;  // AGGIORNATO: LD1, LD2, USS1, USS2, USS3, USS4, TLM
+            numSenders = 1;
+            numReceivers = 7;
             @display("p=800,100");
         }
 
@@ -125,9 +125,9 @@ network AutomotiveTDMANetwork
             @display("p=900,100");
         }
 
-        // USS2: Ultrasonic Sensor 2
-        // FLOW 3: USS2 → CU
-        USS2: EndSystem {
+        // US2: Ultrasonic Sensor 2 (RINOMINATO da USS2)
+        // FLOW 3: US2 → CU
+        US2: EndSystem {
             macAddress = "00:00:00:00:00:09";
             numSenders = 1;
             numReceivers = 0;
@@ -147,17 +147,17 @@ network AutomotiveTDMANetwork
 
         // ME: Media Entertainment
         // FLOW 2: ME → S1, S2, S3, S4 (4 destinazioni audio)
-        // FLOW 6: ME → RSE (video streaming 178500B)
+        // FLOW 6: ME → RS1, RS2 (2 video streaming)
         ME: EndSystem {
             macAddress = "00:00:00:00:00:0B";
-            numSenders = 5;    // AGGIORNATO: 4 per flow2 (speaker) + 1 per flow6 (RSE)
+            numSenders = 6;  // AGGIORNATO: 4 audio + 2 video
             numReceivers = 0;
             @display("p=150,650");
         }
 
-        // USS4: Ultrasonic Sensor 4
-        // FLOW 3: USS4 → CU
-        USS4: EndSystem {
+        // US4: Ultrasonic Sensor 4 (RINOMINATO da USS4)
+        // FLOW 3: US4 → CU
+        US4: EndSystem {
             macAddress = "00:00:00:00:00:0C";
             numSenders = 1;
             numReceivers = 0;
@@ -173,9 +173,9 @@ network AutomotiveTDMANetwork
             @display("p=350,650");
         }
 
-        // RSE: Rear Seat Entertainment
+        // RS2: Rear Seat Entertainment 2 (RINOMINATO da RSE)
         // FLOW 6: Riceve da ME (streaming video)
-        RSE: EndSystem {
+        RS2: EndSystem {
             macAddress = "00:00:00:00:00:0E";
             numSenders = 0;
             numReceivers = 1;
@@ -193,9 +193,9 @@ network AutomotiveTDMANetwork
             @display("p=800,650");
         }
 
-        // USS3: Ultrasonic Sensor 3
-        // FLOW 3: USS3 → CU
-        USS3: EndSystem {
+        // US3: Ultrasonic Sensor 3 (RINOMINATO da USS3)
+        // FLOW 3: US3 → CU
+        US3: EndSystem {
             macAddress = "00:00:00:00:00:10";
             numSenders = 1;
             numReceivers = 0;
@@ -211,20 +211,28 @@ network AutomotiveTDMANetwork
             @display("p=1000,650");
         }
 
+        // RS1: Rear Seat Entertainment 1 (NUOVO)
+        // FLOW 6b: Riceve da ME (streaming video)
+        RS1: EndSystem {
+            macAddress = "00:00:00:00:00:12";
+            numSenders = 0;
+            numReceivers = 1;
+            @display("p=700,750");
+        }
+
     connections:
         // ===== COLLEGAMENTI SWITCH 1 =====
-        // Nodi su Switch 1
         TLM.ethg$o --> EthernetChannel --> switch1.channelIn[0];
         TLM.ethg$i <-- EthernetChannel <-- switch1.channelOut[0];
 
-        USS1.ethg$o --> EthernetChannel --> switch1.channelIn[1];
-        USS1.ethg$i <-- EthernetChannel <-- switch1.channelOut[1];
+        US1.ethg$o --> EthernetChannel --> switch1.channelIn[1];
+        US1.ethg$i <-- EthernetChannel <-- switch1.channelOut[1];
 
         LD1.ethg$o --> EthernetChannel --> switch1.channelIn[2];
         LD1.ethg$i <-- EthernetChannel <-- switch1.channelOut[2];
 
-        FC.ethg$o --> EthernetChannel --> switch1.channelIn[3];
-        FC.ethg$i <-- EthernetChannel <-- switch1.channelOut[3];
+        CM1.ethg$o --> EthernetChannel --> switch1.channelIn[3];
+        CM1.ethg$i <-- EthernetChannel <-- switch1.channelOut[3];
 
         S1.ethg$o --> EthernetChannel --> switch1.channelIn[4];
         S1.ethg$i <-- EthernetChannel <-- switch1.channelOut[4];
@@ -232,7 +240,6 @@ network AutomotiveTDMANetwork
         HU.ethg$o --> EthernetChannel --> switch1.channelIn[5];
         HU.ethg$i <-- EthernetChannel <-- switch1.channelOut[5];
 
-        // Collegamenti inter-switch da Switch 1
         switch1.channelOut[6] --> EthernetChannel --> switch2.channelIn[4];
         switch1.channelIn[6] <-- EthernetChannel <-- switch2.channelOut[4];
 
@@ -240,50 +247,47 @@ network AutomotiveTDMANetwork
         switch1.channelIn[7] <-- EthernetChannel <-- switch3.channelOut[4];
 
         // ===== COLLEGAMENTI SWITCH 2 =====
-        // Nodi su Switch 2
         CU.ethg$o --> EthernetChannel --> switch2.channelIn[0];
         CU.ethg$i <-- EthernetChannel <-- switch2.channelOut[0];
 
         S2.ethg$o --> EthernetChannel --> switch2.channelIn[1];
         S2.ethg$i <-- EthernetChannel <-- switch2.channelOut[1];
 
-        USS2.ethg$o --> EthernetChannel --> switch2.channelIn[2];
-        USS2.ethg$i <-- EthernetChannel <-- switch2.channelOut[2];
+        US2.ethg$o --> EthernetChannel --> switch2.channelIn[2];
+        US2.ethg$i <-- EthernetChannel <-- switch2.channelOut[2];
 
         LD2.ethg$o --> EthernetChannel --> switch2.channelIn[3];
         LD2.ethg$i <-- EthernetChannel <-- switch2.channelOut[3];
 
-        // Collegamento inter-switch da Switch 2 a Switch 4
         switch2.channelOut[5] --> EthernetChannel --> switch4.channelIn[3];
         switch2.channelIn[5] <-- EthernetChannel <-- switch4.channelOut[3];
 
         // ===== COLLEGAMENTI SWITCH 3 =====
-        // Nodi su Switch 3
         ME.ethg$o --> EthernetChannel --> switch3.channelIn[0];
         ME.ethg$i <-- EthernetChannel <-- switch3.channelOut[0];
 
-        USS4.ethg$o --> EthernetChannel --> switch3.channelIn[1];
-        USS4.ethg$i <-- EthernetChannel <-- switch3.channelOut[1];
+        US4.ethg$o --> EthernetChannel --> switch3.channelIn[1];
+        US4.ethg$i <-- EthernetChannel <-- switch3.channelOut[1];
 
         S3.ethg$o --> EthernetChannel --> switch3.channelIn[2];
         S3.ethg$i <-- EthernetChannel <-- switch3.channelOut[2];
 
-        RSE.ethg$o --> EthernetChannel --> switch3.channelIn[3];
-        RSE.ethg$i <-- EthernetChannel <-- switch3.channelOut[3];
+        RS2.ethg$o --> EthernetChannel --> switch3.channelIn[3];
+        RS2.ethg$i <-- EthernetChannel <-- switch3.channelOut[3];
 
-        // Collegamento inter-switch da Switch 3 a Switch 4
         switch3.channelOut[5] --> EthernetChannel --> switch4.channelIn[4];
         switch3.channelIn[5] <-- EthernetChannel <-- switch4.channelOut[4];
 
         // ===== COLLEGAMENTI SWITCH 4 =====
-        // Nodi su Switch 4
         RC.ethg$o --> EthernetChannel --> switch4.channelIn[0];
         RC.ethg$i <-- EthernetChannel <-- switch4.channelOut[0];
 
-        USS3.ethg$o --> EthernetChannel --> switch4.channelIn[1];
-        USS3.ethg$i <-- EthernetChannel <-- switch4.channelOut[1];
+        US3.ethg$o --> EthernetChannel --> switch4.channelIn[1];
+        US3.ethg$i <-- EthernetChannel <-- switch4.channelOut[1];
 
         S4.ethg$o --> EthernetChannel --> switch4.channelIn[2];
         S4.ethg$i <-- EthernetChannel <-- switch4.channelOut[2];
-}
 
+        RS1.ethg$o --> EthernetChannel --> switch4.channelIn[5];
+        RS1.ethg$i <-- EthernetChannel <-- switch4.channelOut[5];
+}

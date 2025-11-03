@@ -64,21 +64,21 @@ void TDMAScheduler::defineFlows() {
         SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0
     });
 
-    // Flow 3: USS1-4 → CU (Ultrasuoni)
+    // Flow 3: US1-4 → CU (Ultrasuoni)
     flows.push_back({
-        "flow3_USS1_to_CU", "USS1.senderApp[0]", 
+        "flow3_US1_to_CU", "US1.senderApp[0]", 
         SimTime(0.1, SIMTIME_S), 188, 1, 8, 0
     });
     flows.push_back({
-        "flow3_USS2_to_CU", "USS2.senderApp[0]", 
+        "flow3_US2_to_CU", "US2.senderApp[0]", 
         SimTime(0.1, SIMTIME_S), 188, 1, 8, 0
     });
     flows.push_back({
-        "flow3_USS3_to_CU", "USS3.senderApp[0]", 
+        "flow3_US3_to_CU", "US3.senderApp[0]", 
         SimTime(0.1, SIMTIME_S), 188, 1, 8, 0
     });
     flows.push_back({
-        "flow3_USS4_to_CU", "USS4.senderApp[0]", 
+        "flow3_US4_to_CU", "US4.senderApp[0]", 
         SimTime(0.1, SIMTIME_S), 188, 1, 8, 0
     });
 
@@ -88,15 +88,19 @@ void TDMAScheduler::defineFlows() {
         SimTime(0.01, SIMTIME_S), 1500, 7, 4, 0
     });
 
-    // Flow 5: FC → HU (Camera frontale, 119 frammenti)
+    // Flow 5: CM1 → HU (Camera frontale, 119 frammenti) - AGGIORNATO nome
     flows.push_back({
-        "flow5_FC_to_HU", "FC.senderApp[0]", 
+        "flow5_CM1_to_HU", "CM1.senderApp[0]", 
         SimTime(0.01666, SIMTIME_S), 1500, 119, 5, 0
     });
 
-    // Flow 6: ME → RSE (Streaming video, 119 frammenti)
+    // Flow 6: ME → RS1, RS2 (Streaming video, 119 frammenti) - AGGIORNATO con 2 destinazioni
     flows.push_back({
-        "flow6_ME_to_RSE", "ME.senderApp[4]", 
+        "flow6_ME_to_RS1", "ME.senderApp[4]", 
+        SimTime(0.03333, SIMTIME_S), 1500, 119, 6, 0
+    });
+    flows.push_back({
+        "flow6_ME_to_RS2", "ME.senderApp[5]", 
         SimTime(0.03333, SIMTIME_S), 1500, 119, 6, 0
     });
 
@@ -124,7 +128,7 @@ void TDMAScheduler::calculateTransmissionTimes() {
 
     for (auto &flow : flows) {
         flow.txTime = calculateTxTime(flow.payloadSize);
-        EV << "Flow " << flow.flowName << ": T_tx = " << flow.txTime << endl;
+        EV << "Flow " << flow.flowName << ": T_tx = " << flow.txTime << " s" << endl;
     }
 }
 
@@ -139,9 +143,6 @@ int TDMAScheduler::calculateTransmissionsInHyperperiod(simtime_t period) {
     return (int)(hyperperiod / period);
 }
 
-// ============================================================================
-// SCHEDULAZIONE CORRETTA CON GESTIONE BURST
-// ============================================================================
 void TDMAScheduler::generateSchedule()
 {
     EV << "=== Generazione Schedule TDMA con Rate Monotonic ===" << endl;
@@ -149,20 +150,20 @@ void TDMAScheduler::generateSchedule()
     struct Job {
         std::string flowName;
         std::string senderModule;
-        int instanceNumber;           // Quale istanza del periodo (0, 1, 2...)
-        simtime_t releaseTime;        // Quando questo job diventa pronto
-        simtime_t deadline;           // Deadline assoluta
-        simtime_t txTime;             // Tempo di trasmissione per frammento
-        int burstSize;                // Numero totale di frammenti
-        int fragmentsScheduled;       // Quanti frammenti abbiamo già schedulato
-        int priority;                 // Per Rate Monotonic
-        simtime_t period;             // Per debug
+        int instanceNumber;
+        simtime_t releaseTime;
+        simtime_t deadline;
+        simtime_t txTime;
+        int burstSize;
+        int fragmentsScheduled;
+        int priority;
+        simtime_t period;
     };
 
     std::vector<Job> allJobs;
     int totalFragmentsNeeded = 0;
 
-    // ===== FASE 1: Genera tutte le istanze dei job nell'iperperiodo =====
+    // Genera tutte le istanze dei job nell'iperperiodo
     for (const auto& flow : flows) {
         int numInstances = calculateTransmissionsInHyperperiod(flow.period);
         
@@ -178,7 +179,7 @@ void TDMAScheduler::generateSchedule()
                 deadline,
                 flow.txTime,
                 flow.burstSize,
-                0,  // fragmentsScheduled inizia a 0
+                0,
                 flow.priority,
                 flow.period
             });
@@ -194,10 +195,10 @@ void TDMAScheduler::generateSchedule()
     int scheduledFragmentCount = 0;
     const simtime_t IFG = SimTime(96, SIMTIME_NS);
 
-    // ===== FASE 2: Loop principale di schedulazione =====
+    // Loop principale di schedulazione
     while (scheduledFragmentCount < totalFragmentsNeeded) {
         
-        // Costruisci la coda dei job pronti (che hanno ancora frammenti da inviare)
+        // Costruisci la coda dei job pronti
         std::vector<Job*> readyQueue;
         
         for (auto& job : allJobs) {
@@ -219,29 +220,26 @@ void TDMAScheduler::generateSchedule()
             }
             
             if (nextRelease > currentTime) {
-                EV << "Nessun job pronto a t=" << currentTime 
-                   << ", salto a t=" << nextRelease << endl;
                 currentTime = nextRelease;
                 continue;
             }
             
-            break;  // Fine schedulazione
+            break;
         }
 
-        // Ordina per priorità (Rate Monotonic: periodo più basso = priorità più alta)
+        // Ordina per priorità (Rate Monotonic)
         std::sort(readyQueue.begin(), readyQueue.end(),
             [](const Job* a, const Job* b) {
                 if (a->priority != b->priority) {
-                    return a->priority < b->priority;  // Priorità numerica più bassa vince
+                    return a->priority < b->priority;
                 }
-                // Pareggio: scegli quello con deadline più vicina
                 return a->deadline < b->deadline;
             });
 
         // Prendi il job con priorità più alta
         Job* selected = readyQueue[0];
 
-        // ===== SCHEDULA UN SINGOLO FRAMMENTO =====
+        // Schedula un singolo frammento
         TransmissionSlot slot;
         slot.flowName = selected->flowName;
         slot.senderModule = selected->senderModule;
@@ -263,19 +261,11 @@ void TDMAScheduler::generateSchedule()
                   selected->deadline.str().c_str());
         }
 
-        // Aggiungi allo schedule
         schedule.push_back(slot);
         selected->fragmentsScheduled++;
         scheduledFragmentCount++;
 
-        // Debug dettagliato
-        if (selected->flowName.find("flow2") != std::string::npos) {
-            EV << "[AUDIO] t=" << currentTime << " -> " 
-               << selected->flowName << " fragment " 
-               << slot.fragmentNumber << "/" << selected->burstSize << endl;
-        }
-
-        // Avanza il tempo (trasmissione + IFG)
+        // Avanza il tempo
         currentTime = finishTime + IFG;
     }
 
@@ -323,14 +313,25 @@ bool TDMAScheduler::checkCollisions() {
 }
 
 void TDMAScheduler::assignOffsetsToSenders() {
-    EV << "Assegnazione offset alle applicazioni sender..." << endl;
+    EV << "Assegnazione offset e fragmentTxTime alle applicazioni sender..." << endl;
 
     std::map<std::string, simtime_t> senderOffsets;
+    std::map<std::string, simtime_t> senderTxTimes;
 
-    // Trova il primo offset per ogni sender
+    // Trova il primo offset per ogni sender e il suo txTime
     for (auto &slot : schedule) {
         if (senderOffsets.find(slot.senderModule) == senderOffsets.end()) {
             senderOffsets[slot.senderModule] = slot.offset;
+            
+            // Trova il txTime per questo sender
+            auto it = std::find_if(flows.begin(), flows.end(),
+                [&slot](const FlowDescriptor &f) {
+                    return f.senderModule == slot.senderModule;
+                });
+            
+            if (it != flows.end()) {
+                senderTxTimes[slot.senderModule] = it->txTime;
+            }
         }
     }
 
@@ -344,7 +345,16 @@ void TDMAScheduler::assignOffsetsToSenders() {
             continue;
         }
 
+        // ✅ CRITICO: Imposta sia offset che fragmentTxTime
         senderModule->par("tdmaOffset").setDoubleValue(entry.second.dbl());
-        EV << "Offset " << entry.second << " -> " << entry.first << endl;
+        
+        // Imposta fragmentTxTime se disponibile
+        if (senderTxTimes.find(entry.first) != senderTxTimes.end()) {
+            senderModule->par("fragmentTxTime").setDoubleValue(senderTxTimes[entry.first].dbl());
+            EV << "Offset " << entry.second << " + fragmentTxTime " 
+               << senderTxTimes[entry.first] << " -> " << entry.first << endl;
+        } else {
+            EV << "Offset " << entry.second << " -> " << entry.first << endl;
+        }
     }
 }

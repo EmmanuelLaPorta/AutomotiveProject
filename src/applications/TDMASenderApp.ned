@@ -4,8 +4,8 @@ simple TDMASenderApp
 {
     parameters:
         double period @unit(s);
-        double tdmaOffset @unit(s) = default(0s) @mutable;  // Modificabile dallo scheduler
-        double fragmentTxTime @unit(s) = default(12.304us);
+        double tdmaOffset @unit(s) = default(0s) @mutable;
+        double fragmentTxTime @unit(s) = default(0s) @mutable;  // Sarà impostato dallo scheduler
         string name;
         int payloadSize @unit(B);
         int burstSize = default(1);
