@@ -13,12 +13,12 @@ class TDMAScheduler : public cSimpleModule
   protected:
     struct FlowDescriptor {
         std::string flowName;
-        std::string senderModule;  // Path completo (es: "network.LD1.senderApp[0]")
+        std::string senderModule;
         simtime_t period;
         int payloadSize;
         int burstSize;
-        int priority;  // Per Rate Monotonic: priorità più alta = periodo più basso
-        simtime_t txTime;  // Tempo trasmissione singolo frame
+        int priority;
+        simtime_t txTime;
     };
 
     struct TransmissionSlot {
@@ -26,26 +26,26 @@ class TDMAScheduler : public cSimpleModule
         std::string senderModule;
         simtime_t offset;
         int fragmentNumber;
+        int burstSize;  // ✅ NUOVO: Per debug
+        int instanceNumber;  // ✅ NUOVO: Per tracciare quale istanza del job
     };
 
     std::vector<FlowDescriptor> flows;
     std::vector<TransmissionSlot> schedule;
     
     simtime_t hyperperiod;
-    double datarate;   // in bps
-    int overhead;  //in bytes
+    double datarate;
+    int overhead;
 
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
     
-    // Metodi per il calcolo dello schedule
     void defineFlows();
     void calculateTransmissionTimes();
     void generateSchedule();
     bool checkCollisions();
     void assignOffsetsToSenders();
     
-    // Utility
     simtime_t calculateTxTime(int payloadSize);
     int calculateTransmissionsInHyperperiod(simtime_t period);
 };

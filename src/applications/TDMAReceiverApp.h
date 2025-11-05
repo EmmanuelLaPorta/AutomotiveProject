@@ -10,12 +10,16 @@ class TDMAReceiverApp : public cSimpleModule {
   protected:
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
+    virtual void finish() override;
 
     string name;
     
-    // ✅ CORRETTO: Per calcolo jitter
+    // Per calcolo jitter
     simtime_t lastDelay;
     bool firstPacket;
+    
+    // Statistiche
+    int packetsReceived;
 };
 
 #endif

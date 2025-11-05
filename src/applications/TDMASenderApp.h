@@ -11,19 +11,19 @@ class TDMASenderApp : public cSimpleModule {
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
 
-    virtual void transmitPacket();
     virtual void sendFragment(int fragmentNumber);
 
     simtime_t period;
     simtime_t tdmaOffset;
-    simtime_t fragmentTxTime;  // NUOVO: Tempo per trasmettere un frammento
+    simtime_t fragmentTxTime;
     string name;
     unsigned long long payloadSize;
     unsigned int burstSize;
     string destAddr;
     string srcAddr;
     
-    int currentBurstNumber;  // Contatore per burst multipli nello stesso periodo
+    int currentBurstNumber;
+    int nextFragmentToSend;  // ✅ Traccia quale frammento inviare
 };
 
 #endif

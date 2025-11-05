@@ -16,6 +16,7 @@ void TDMASenderApp::initialize()
     srcAddr = par("srcAddr").str();
     
     currentBurstNumber = 0;
+    nextFragmentToSend = 0;
 
     EV << "=== TDMASenderApp Inizializzato ===" << endl;
     EV << "Nome: " << name << endl;
@@ -25,76 +26,46 @@ void TDMASenderApp::initialize()
     EV << "Payload Size: " << payloadSize << " B" << endl;
     EV << "Burst Size: " << burstSize << " frammenti" << endl;
 
-    // Schedule primo invio con offset TDMA
+    // ✅ SOLUZIONE: Schedule SOLO il primo frammento
+    // Gli altri seguiranno automaticamente secondo il periodo
     if(tdmaOffset >= 0) {
-        cMessage *timer = new cMessage("TxTimer");
+        cMessage *timer = new cMessage("FragmentTimer");
+        timer->setKind(1);  // Primo frammento
         scheduleAt(tdmaOffset, timer);
-        EV << "Primo invio schedulato a t=" << tdmaOffset << endl;
+        EV << "Primo frammento schedulato a t=" << tdmaOffset << endl;
     }
 }
 
 void TDMASenderApp::handleMessage(cMessage *msg)
 {
     if(msg->isSelfMessage()) {
-        if(strcmp(msg->getName(), "TxTimer") == 0) {
-            // Timer periodico: invia il burst di frammenti
-            transmitPacket();
-            
-            // Schedula il prossimo burst nel prossimo periodo
-            scheduleAt(simTime() + period, msg);
-            return;
-        }
-
         if(strcmp(msg->getName(), "FragmentTimer") == 0) {
-            // Timer per singolo frammento
-            int fragmentNumber = msg->getKind();  // Numero frammento memorizzato in kind
+            int fragmentNumber = msg->getKind();
+            
             sendFragment(fragmentNumber);
+            
+            if(fragmentNumber < burstSize) {
+                // ? CORRETTO: Prossimo frammento dopo fragmentTxTime + guard
+                cMessage *nextTimer = new cMessage("FragmentTimer");
+                nextTimer->setKind(fragmentNumber + 1);
+                scheduleAt(simTime() + fragmentTxTime + SimTime(596, SIMTIME_NS), nextTimer);
+            } else {
+                // Burst completo, prossimo burst dopo periodo
+                cMessage *nextTimer = new cMessage("FragmentTimer");
+                nextTimer->setKind(1);
+                scheduleAt(simTime() + period, nextTimer);
+            }
+            
             delete msg;
             return;
         }
-
-        error("Arrivato un self message non previsto: %s", msg->getName());
-    }
-
-    // Questo modulo invia solo, non riceve
-    error("TDMASenderApp non dovrebbe ricevere messaggi dalla rete");
-}
-
-void TDMASenderApp::transmitPacket() 
-{
-    EV << "=== Inizio trasmissione burst ===" << endl;
-    EV << "Tempo: " << simTime() << endl;
-    EV << "Burst #" << (++currentBurstNumber) << endl;
-    EV << "Frammenti da inviare: " << burstSize << endl;
-
-    // ✅ SOLUZIONE FRAMMENTAZIONE DISTRIBUITA NEL TEMPO
-    // Invece di inviare tutti i frammenti in un loop (SBAGLIATO),
-    // scheduliamo ogni frammento con un offset temporale
-    
-    for(int i = 0; i < burstSize; i++) {
-        // Calcola quando inviare questo frammento
-        // Frammento 0: t = ora
-        // Frammento 1: t = ora + fragmentTxTime
-        // Frammento 2: t = ora + 2*fragmentTxTime
-        // ...
-        simtime_t fragmentOffset = i * fragmentTxTime;
-        
-        // Crea un timer per questo frammento
-        cMessage *fragmentTimer = new cMessage("FragmentTimer");
-        fragmentTimer->setKind(i + 1);  // Memorizza il numero del frammento (1-based)
-        
-        // Schedula l'invio con l'offset calcolato
-        scheduleAt(simTime() + fragmentOffset, fragmentTimer);
-        
-        EV << "  Frammento " << (i+1) << "/" << burstSize 
-           << " schedulato a t=" << (simTime() + fragmentOffset) << endl;
     }
 }
 
 void TDMASenderApp::sendFragment(int fragmentNumber)
 {
-    EV << "Invio frammento " << fragmentNumber << "/" << burstSize 
-       << " a t=" << simTime() << endl;
+    EV_DEBUG << "Invio frammento " << fragmentNumber << "/" << burstSize 
+             << " a t=" << simTime() << endl;
 
     // Crea il pacchetto dati
     DataPacket *pkt = new DataPacket(name.c_str());
@@ -109,8 +80,6 @@ void TDMASenderApp::sendFragment(int fragmentNumber)
     req->setDst(destAddr.c_str());
     pkt->setControlInfo(req);
 
-    // INVIA IL SINGOLO FRAMMENTO
+    // Invia il frammento
     send(pkt, "lowerLayerOut");
-    
-    EV << "  Frammento inviato con successo" << endl;
 }
