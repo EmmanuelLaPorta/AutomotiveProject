@@ -17,7 +17,7 @@ void TDMAReceiverApp::handleMessage(cMessage *msg)
 {
     DataPacket *pkt = check_and_cast<DataPacket *>(msg);
     
-    // Filtra solo i pacchetti destinati a questa app
+    // FILTRO CRITICO: Ignora pacchetti di altri flussi
     if(strcmp(pkt->getName(), name.c_str()) != 0) {
         delete pkt;
         return;
@@ -25,26 +25,23 @@ void TDMAReceiverApp::handleMessage(cMessage *msg)
 
     packetsReceived++;
     
-    EV_DEBUG << "Ricevuto pacchetto #" << pkt->getPktNumber()
-            << "/" << pkt->getBurstSize() 
-            << " (totale ricevuti: " << packetsReceived << ")" << endl;
-    
     simtime_t delay = simTime() - pkt->getGenTime();
 
-    // ✅ JITTER CORRETTO: Calcola la variazione di delay tra pacchetti consecutivi
+    // JITTER CORRETTO: Solo tra pacchetti CONSECUTIVI dello STESSO flusso
     if(!firstPacket) {
         simtime_t jitter = fabs((delay - lastDelay).dbl());
         emit(registerSignal("jitter"), jitter);
         
-        EV_DEBUG << "E2E Delay: " << delay << ", Last Delay: " << lastDelay 
+        EV_DEBUG << "[" << name << "] Pkt #" << pkt->getPktNumber() 
+                 << " - E2E: " << delay 
                  << ", Jitter: " << jitter << endl;
     } else {
-        EV_DEBUG << "Primo pacchetto, jitter non calcolato" << endl;
+        EV_DEBUG << "[" << name << "] Primo pacchetto, jitter=0" << endl;
+        firstPacket = false;
     }
     
-    // Aggiorna per il prossimo pacchetto
+    // Aggiorna SEMPRE per il prossimo pacchetto
     lastDelay = delay;
-    firstPacket = false;
 
     // Emetti E2E Delay
     emit(registerSignal("E2EDelay"), delay);
@@ -52,7 +49,7 @@ void TDMAReceiverApp::handleMessage(cMessage *msg)
     // Se è l'ultimo frammento del burst, emetti anche E2EBurstDelay
     if(pkt->getPktNumber() == pkt->getBurstSize()) {
         emit(registerSignal("E2EBurstDelay"), delay);
-        EV_DEBUG << "Burst completo ricevuto, E2EBurstDelay: " << delay << endl;
+        EV_DEBUG << "[" << name << "] Burst completo" << endl;
     }
 
     delete pkt;
@@ -60,9 +57,8 @@ void TDMAReceiverApp::handleMessage(cMessage *msg)
 
 void TDMAReceiverApp::finish()
 {
-    EV << "=== Statistiche Receiver ===" << endl;
-    EV << "Flow: " << name << endl;
-    EV << "Pacchetti totali ricevuti: " << packetsReceived << endl;
+    EV << "=== Statistiche " << name << " ===" << endl;
+    EV << "Pacchetti ricevuti: " << packetsReceived << endl;
     
     recordScalar("totalPacketsReceived", packetsReceived);
 }

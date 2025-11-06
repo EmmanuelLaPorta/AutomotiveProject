@@ -1,6 +1,7 @@
 #include "TDMAScheduler.h"
 #include <cmath>
 #include <algorithm>
+#include <set>
 
 Define_Module(TDMAScheduler);
 
@@ -138,157 +139,152 @@ simtime_t TDMAScheduler::calculateTxTime(int payloadSize) {
 }
 
 int TDMAScheduler::calculateTransmissionsInHyperperiod(simtime_t period) {
-    return (int)ceil(hyperperiod.dbl() / period.dbl());
+    return (int)floor(hyperperiod.dbl() / period.dbl());
 }
 
 void TDMAScheduler::generateSchedule()
 {
-    EV << "=== Generazione Schedule TDMA Interleaved Rate Monotonic ===" << endl;
+    EV << "=== Generazione Schedule TDMA Frame-by-Frame Interleaved ===" << endl;
 
-    // Struttura per tracciare i job
+    // Struttura per Job singolo (UN FRAMMENTO)
     struct Job {
         std::string flowName;
         std::string senderModule;
-        int instanceNumber;
+        int burstInstanceNumber;      // Quale burst (es: burst 0, 1, 2...)
+        int fragmentNumber;            // Quale frammento nel burst (1...119)
         simtime_t releaseTime;
         simtime_t deadline;
         simtime_t txTime;
-        int burstSize;
-        int fragmentsScheduled;
         int priority;
-        simtime_t period;
+        int totalFragments;
     };
 
     std::vector<Job> allJobs;
 
-    // Genera tutte le istanze dei job nell'iperperiodo
+    // SOLUZIONE: Genera JOB INDIVIDUALI per ogni SINGOLO FRAMMENTO
     for (const auto& flow : flows) {
-        int numInstances = calculateTransmissionsInHyperperiod(flow.period);
-        
-        if (numInstances * flow.period > hyperperiod) {
-                numInstances = (int)(hyperperiod.dbl() / flow.period.dbl());
-            }
+        int numBursts = calculateTransmissionsInHyperperiod(flow.period);
 
-        for (int i = 0; i < numInstances; ++i) {
-            simtime_t release = i * flow.period;
-            simtime_t deadline = release + flow.period;
-            
-            allJobs.push_back({
-                flow.flowName,
-                flow.senderModule,
-                i,
-                release,
-                deadline,
-                flow.txTime,
-                flow.burstSize,
-                0,  // fragmentsScheduled
-                flow.priority,
-                flow.period
-            });
+        for (int burstNum = 0; burstNum < numBursts; ++burstNum) {
+            simtime_t burstRelease = burstNum * flow.period;
+            simtime_t burstDeadline = burstRelease + flow.period;
+
+            // Per ogni frammento nel burst, crea un job separato
+            for (int fragNum = 1; fragNum <= flow.burstSize; ++fragNum) {
+                allJobs.push_back({
+                    flow.flowName,
+                    flow.senderModule,
+                    burstNum,
+                    fragNum,
+                    burstRelease,  // Tutti i frammenti dello stesso burst hanno stesso release
+                    burstDeadline,
+                    flow.txTime,
+                    flow.priority,
+                    flow.burstSize
+                });
+            }
         }
     }
 
-    EV << "Totale istanze job: " << allJobs.size() << endl;
+    EV << "Totale job (frammenti) da schedulare: " << allJobs.size() << endl;
 
-    // ✅ SOLUZIONE: Interleaved Scheduling
-    // Invece di schedulare tutti i frammenti di un burst consecutivamente,
-    // scheduliamo UN FRAMMENTO alla volta e poi ricontrolliamo la priorità
-    
+    // ALGORITMO CORRETTO: Scheduling frame-by-frame con preemption
     simtime_t currentTime = 0;
-    const simtime_t IFG = SimTime(96, SIMTIME_NS);  // Inter-Frame Gap
-    const simtime_t GUARD_TIME = SimTime(500, SIMTIME_NS);  // Guard time extra
+    const simtime_t IFG = SimTime(96, SIMTIME_NS);
+    const simtime_t GUARD_TIME = SimTime(1000, SIMTIME_NS);  // Aumentato a 1µs
     
-    int totalFragmentsScheduled = 0;
-    int totalFragmentsNeeded = 0;
-    
-    for (const auto& job : allJobs) {
-        totalFragmentsNeeded += job.burstSize;
-    }
+    std::set<int> scheduledJobs;  // Traccia job già schedulati
+    int totalJobs = allJobs.size();
+    int scheduledCount = 0;
 
-    EV << "Totale frammenti da schedulare: " << totalFragmentsNeeded << endl;
-
-    while (totalFragmentsScheduled < totalFragmentsNeeded) {
+    while (scheduledCount < totalJobs) {
+        // 1. Trova tutti i job PRONTI e NON ancora schedulati
+        std::vector<int> readyJobIndices;
         
-        // 1. Trova tutti i job pronti
-        std::vector<Job*> readyQueue;
-        
-        for (auto& job : allJobs) {
-            if (job.releaseTime <= currentTime && job.fragmentsScheduled < job.burstSize) {
-                readyQueue.push_back(&job);
+        for (size_t i = 0; i < allJobs.size(); ++i) {
+            if (scheduledJobs.find(i) == scheduledJobs.end() &&
+                allJobs[i].releaseTime <= currentTime) {
+                readyJobIndices.push_back(i);
             }
         }
 
-        // 2. Se nessuno è pronto, salta al prossimo release
-        if (readyQueue.empty()) {
+        // 2. Se nessuno pronto, salta al prossimo release
+        if (readyJobIndices.empty()) {
             simtime_t nextRelease = hyperperiod;
             
-            for (auto& job : allJobs) {
-                if (job.fragmentsScheduled < job.burstSize && 
-                    job.releaseTime > currentTime && 
-                    job.releaseTime < nextRelease) {
-                    nextRelease = job.releaseTime;
+            for (size_t i = 0; i < allJobs.size(); ++i) {
+                if (scheduledJobs.find(i) == scheduledJobs.end() &&
+                    allJobs[i].releaseTime > currentTime &&
+                    allJobs[i].releaseTime < nextRelease) {
+                    nextRelease = allJobs[i].releaseTime;
                 }
             }
             
-            if (nextRelease <= currentTime || nextRelease >= hyperperiod) {
-                break;
+            if (nextRelease >= hyperperiod) {
+                break;  // Fine scheduling
             }
             
             currentTime = nextRelease;
             continue;
         }
 
-        // 3. Ordina per priorità (numero più basso = priorità più alta)
-        std::sort(readyQueue.begin(), readyQueue.end(),
-            [](const Job* a, const Job* b) {
-                if (a->priority != b->priority) {
-                    return a->priority < b->priority;
+        // 3. Ordina per PRIORITÀ (Rate Monotonic) poi per fragmentNumber
+        std::sort(readyJobIndices.begin(), readyJobIndices.end(),
+            [&allJobs](int a, int b) {
+                const Job& jobA = allJobs[a];
+                const Job& jobB = allJobs[b];
+                
+                // Priorità più alta (numero minore)
+                if (jobA.priority != jobB.priority) {
+                    return jobA.priority < jobB.priority;
                 }
-                // A parità di priorità, favorisci chi ha deadline più vicina
-                if (a->deadline != b->deadline) {
-                    return a->deadline < b->deadline;
+                
+                // Stessa priorità: favorisci stesso burst (continuità)
+                if (jobA.flowName == jobB.flowName &&
+                    jobA.burstInstanceNumber == jobB.burstInstanceNumber) {
+                    return jobA.fragmentNumber < jobB.fragmentNumber;
                 }
-                // A parità di deadline, favorisci chi ha meno frammenti schedulati (fairness)
-                return a->fragmentsScheduled < b->fragmentsScheduled;
+                
+                // Deadline più vicina
+                if (jobA.deadline != jobB.deadline) {
+                    return jobA.deadline < jobB.deadline;
+                }
+                
+                return jobA.fragmentNumber < jobB.fragmentNumber;
             });
 
-        // 4. Schedula UN SOLO FRAMMENTO del job con priorità più alta
-        Job* selected = readyQueue[0];
+        // 4. Schedula il job con priorità più alta
+        int selectedIdx = readyJobIndices[0];
+        const Job& selected = allJobs[selectedIdx];
 
         TransmissionSlot slot;
-        slot.flowName = selected->flowName;
-        slot.senderModule = selected->senderModule;
+        slot.flowName = selected.flowName;
+        slot.senderModule = selected.senderModule;
         slot.offset = currentTime;
-        slot.fragmentNumber = selected->fragmentsScheduled + 1;
-        slot.burstSize = selected->burstSize;
-        slot.instanceNumber = selected->instanceNumber;
+        slot.fragmentNumber = selected.fragmentNumber;
+        slot.burstSize = selected.totalFragments;
+        slot.instanceNumber = selected.burstInstanceNumber;
 
-        simtime_t finishTime = currentTime + selected->txTime;
+        simtime_t finishTime = currentTime + selected.txTime;
 
         // Verifica deadline
-        if (finishTime > selected->deadline) {
-            EV_ERROR << "DEADLINE MISS! Flow: " << selected->flowName 
-                     << " (instance " << selected->instanceNumber 
-                     << ", fragment " << (selected->fragmentsScheduled + 1) 
-                     << "/" << selected->burstSize << ")" << endl;
-            EV_ERROR << "    Release: " << selected->releaseTime 
-                     << ", Deadline: " << selected->deadline 
-                     << ", Finish: " << finishTime << endl;
-            
-            // Continua comunque (best-effort)
+        if (finishTime > selected.deadline) {
+            EV_WARN << "Deadline miss: " << selected.flowName 
+                    << " burst " << selected.burstInstanceNumber
+                    << " frag " << selected.fragmentNumber << endl;
         }
 
         schedule.push_back(slot);
-        selected->fragmentsScheduled++;
-        totalFragmentsScheduled++;
+        scheduledJobs.insert(selectedIdx);
+        scheduledCount++;
 
-        // 5. Avanza il tempo (trasmissione + IFG + guard time)
+        // 5. Avanza tempo con guard time
         currentTime = finishTime + IFG + GUARD_TIME;
 
-        // Log per debug (solo ogni 100 frammenti per non intasare)
-        if (totalFragmentsScheduled % 100 == 0) {
-            EV << "Progress: " << totalFragmentsScheduled << "/" 
-               << totalFragmentsNeeded << " frammenti schedulati" << endl;
+        // Progress log
+        if (scheduledCount % 200 == 0) {
+            EV << "Progress: " << scheduledCount << "/" << totalJobs 
+               << " (" << (scheduledCount*100/totalJobs) << "%)" << endl;
         }
     }
 
@@ -296,22 +292,18 @@ void TDMAScheduler::generateSchedule()
     EV << "Slot totali: " << schedule.size() << endl;
     EV << "Tempo finale: " << currentTime << endl;
     
+    double utilizzo = (currentTime.dbl() / hyperperiod.dbl()) * 100;
+    EV << "Utilizzo canale: " << utilizzo << "%" << endl;
+    
     if (currentTime > hyperperiod) {
-        double utilizzo = (currentTime.dbl() / hyperperiod.dbl()) * 100;
-        EV_WARN << "??  ATTENZIONE: Schedule supera l'iperperiodo!" << endl;
-        EV_WARN << "    Tempo necessario: " << currentTime << endl;
-        EV_WARN << "    Iperperiodo: " << hyperperiod << endl;
-        EV_WARN << "    Utilizzo canale: " << utilizzo << "%" << endl;
-    } else {
-        double utilizzo = (currentTime.dbl() / hyperperiod.dbl()) * 100;
-        EV << "? Utilizzo canale: " << utilizzo << "%" << endl;
+        EV_ERROR << "ERRORE: Schedule supera l'iperperiodo!" << endl;
+        EV_ERROR << "   Necessario: " << currentTime << " vs Disponibile: " << hyperperiod << endl;
     }
 }
 
 bool TDMAScheduler::checkCollisions() {
     EV << "Verifica collisioni..." << endl;
 
-    // Ordina per tempo
     std::sort(schedule.begin(), schedule.end(),
         [](const TransmissionSlot &a, const TransmissionSlot &b) {
             return a.offset < b.offset;
@@ -323,14 +315,12 @@ bool TDMAScheduler::checkCollisions() {
         TransmissionSlot &current = schedule[i];
         TransmissionSlot &next = schedule[i + 1];
 
-        // Trova il txTime per il flusso corrente
         auto it = std::find_if(flows.begin(), flows.end(),
             [&current](const FlowDescriptor &f) {
                 return f.senderModule == current.senderModule;
             });
 
         if (it == flows.end()) {
-            EV_WARN << "Flow non trovato per " << current.senderModule << endl;
             continue;
         }
 
@@ -338,17 +328,14 @@ bool TDMAScheduler::checkCollisions() {
 
         if (endTime > next.offset) {
             collisionCount++;
-            EV_ERROR << "COLLISIONE #" << collisionCount << endl;
-            EV_ERROR << "   Slot " << i << ": " << current.flowName 
-                     << " (frag " << current.fragmentNumber << ") termina a " << endTime << endl;
-            EV_ERROR << "   Slot " << (i+1) << ": " << next.flowName 
-                     << " (frag " << next.fragmentNumber << ") inizia a " << next.offset << endl;
-            EV_ERROR << "   Overlap: " << (endTime - next.offset) << endl;
+            EV_ERROR << "COLLISIONE: " << current.flowName 
+                     << " → " << next.flowName 
+                     << " (gap: " << (next.offset - endTime) << ")" << endl;
         }
     }
 
     if (collisionCount == 0) {
-        EV << "✅ Nessuna collisione rilevata!" << endl;
+        EV << "Nessuna collisione!" << endl;
         return true;
     } else {
         EV_ERROR << "Totale collisioni: " << collisionCount << endl;
@@ -357,16 +344,14 @@ bool TDMAScheduler::checkCollisions() {
 }
 
 void TDMAScheduler::assignOffsetsToSenders() {
-    EV << "Assegnazione offset e fragmentTxTime alle applicazioni sender..." << endl;
+    EV << "Assegnazione offset alle applicazioni..." << endl;
 
     std::map<std::string, std::vector<simtime_t>> senderFragmentOffsets;
     std::map<std::string, simtime_t> senderTxTimes;
 
-    // Raccogli TUTTI gli offset per ogni sender (per supportare interleaving)
     for (auto &slot : schedule) {
         senderFragmentOffsets[slot.senderModule].push_back(slot.offset);
         
-        // Trova il txTime per questo sender (solo una volta)
         if (senderTxTimes.find(slot.senderModule) == senderTxTimes.end()) {
             auto it = std::find_if(flows.begin(), flows.end(),
                 [&slot](const FlowDescriptor &f) {
@@ -379,7 +364,6 @@ void TDMAScheduler::assignOffsetsToSenders() {
         }
     }
 
-    // Imposta i parametri per ogni sender
     for (auto &entry : senderFragmentOffsets) {
         std::string modulePath = std::string("^.") + entry.first;
         cModule *senderModule = getModuleByPath(modulePath.c_str());
@@ -389,22 +373,17 @@ void TDMAScheduler::assignOffsetsToSenders() {
             continue;
         }
 
-        // Imposta l'offset del PRIMO frammento
         simtime_t firstOffset = entry.second[0];
         senderModule->par("tdmaOffset").setDoubleValue(firstOffset.dbl());
         
-        // Imposta fragmentTxTime
         if (senderTxTimes.find(entry.first) != senderTxTimes.end()) {
             simtime_t txTime = senderTxTimes[entry.first];
             senderModule->par("fragmentTxTime").setDoubleValue(txTime.dbl());
             
-            EV << "✅ " << entry.first << ": offset=" << firstOffset 
-               << ", txTime=" << txTime 
-               << ", frammenti=" << entry.second.size() << endl;
-        } else {
-            EV_WARN << "txTime non trovato per " << entry.first << endl;
+            EV << "" << entry.first << ": offset=" << firstOffset 
+               << ", txTime=" << txTime << endl;
         }
     }
 
-    EV << "✅ Assegnazione completata per " << senderFragmentOffsets.size() << " sender" << endl;
+    EV << "Configurati " << senderFragmentOffsets.size() << " sender" << endl;
 }
