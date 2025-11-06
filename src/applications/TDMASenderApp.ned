@@ -4,7 +4,7 @@ simple TDMASenderApp
 {
     parameters:
         double period @unit(s);
-        double tdmaOffset @unit(s) = default(0s) @mutable;
+        string tdmaOffsets = default("") @mutable; // Lista di offset separati da virgola
         double fragmentTxTime @unit(s) = default(0s) @mutable;  // Sarà impostato dallo scheduler
         string name;
         int payloadSize @unit(B);

@@ -38,85 +38,85 @@ void TDMAScheduler::defineFlows() {
     // Flow 2: ME → S1-S4 (Audio speaker) - PRIORITÀ 1 (massima)
     flows.push_back({
         "flow2_ME_to_S1", "ME.senderApp[0]", 
-        SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0
+        SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
     flows.push_back({
         "flow2_ME_to_S2", "ME.senderApp[1]", 
-        SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0
+        SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
     flows.push_back({
         "flow2_ME_to_S3", "ME.senderApp[2]", 
-        SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0
+        SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
     flows.push_back({
         "flow2_ME_to_S4", "ME.senderApp[3]", 
-        SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0
+        SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     // Flow 7: TLM → HU, CU (Telematica) - PRIORITÀ 2
     flows.push_back({
         "flow7_TLM_to_HU", "TLM.senderApp[0]", 
-        SimTime(0.000625, SIMTIME_S), 600, 1, 2, 0
+        SimTime(0.000625, SIMTIME_S), 600, 1, 2, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
     flows.push_back({
         "flow7_TLM_to_CU", "TLM.senderApp[1]", 
-        SimTime(0.000625, SIMTIME_S), 600, 1, 2, 0
+        SimTime(0.000625, SIMTIME_S), 600, 1, 2, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     // Flow 1: LD1, LD2 → CU (LiDAR) - PRIORITÀ 3
     flows.push_back({
         "flow1_LD1_to_CU", "LD1.senderApp[0]", 
-        SimTime(0.0014, SIMTIME_S), 1300, 1, 3, 0
+        SimTime(0.0014, SIMTIME_S), 1300, 1, 3, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
     flows.push_back({
         "flow1b_LD2_to_CU", "LD2.senderApp[0]", 
-        SimTime(0.0014, SIMTIME_S), 1300, 1, 3, 0
+        SimTime(0.0014, SIMTIME_S), 1300, 1, 3, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     // Flow 4: CU → HU (Display, 7 frammenti) - PRIORITÀ 4
     flows.push_back({
         "flow4_CU_to_HU", "CU.senderApp[0]", 
-        SimTime(0.01, SIMTIME_S), 1500, 7, 4, 0
+        SimTime(0.01, SIMTIME_S), 1500, 7, 4, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     // Flow 5: CM1 → HU (Camera frontale, 119 frammenti) - PRIORITÀ 5
     flows.push_back({
         "flow5_CM1_to_HU", "CM1.senderApp[0]", 
-        SimTime(0.01666, SIMTIME_S), 1500, 119, 5, 0
+        SimTime(0.01666, SIMTIME_S), 1500, 119, 5, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     // Flow 6: ME → RS1, RS2 (Streaming video, 119 frammenti) - PRIORITÀ 6
     flows.push_back({
         "flow6_ME_to_RS1", "ME.senderApp[4]", 
-        SimTime(0.03333, SIMTIME_S), 1500, 119, 6, 0
+        SimTime(0.03333, SIMTIME_S), 1500, 119, 6, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
     flows.push_back({
         "flow6_ME_to_RS2", "ME.senderApp[5]", 
-        SimTime(0.03333, SIMTIME_S), 1500, 119, 6, 0
+        SimTime(0.03333, SIMTIME_S), 1500, 119, 6, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     // Flow 8: RC → HU (Retrocamera, 119 frammenti) - PRIORITÀ 7
     flows.push_back({
         "flow8_RC_to_HU", "RC.senderApp[0]", 
-        SimTime(0.03333, SIMTIME_S), 1500, 119, 7, 0
+        SimTime(0.03333, SIMTIME_S), 1500, 119, 7, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     // Flow 3: US1-4 → CU (Ultrasuoni) - PRIORITÀ 8 (più bassa)
     flows.push_back({
         "flow3_US1_to_CU", "US1.senderApp[0]", 
-        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0
+        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
     flows.push_back({
         "flow3_US2_to_CU", "US2.senderApp[0]", 
-        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0
+        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
     flows.push_back({
         "flow3_US3_to_CU", "US3.senderApp[0]", 
-        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0
+        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
     flows.push_back({
         "flow3_US4_to_CU", "US4.senderApp[0]", 
-        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0
+        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     EV << "Totale flussi definiti: " << flows.size() << endl;
@@ -157,6 +157,7 @@ void TDMAScheduler::generateSchedule()
         simtime_t txTime;
         int priority;
         int totalFragments;
+        simtime_t pathDelay; // Aggiunto pathDelay al Job
     };
 
     std::vector<Job> allJobs;
@@ -180,7 +181,8 @@ void TDMAScheduler::generateSchedule()
                     burstDeadline,
                     flow.txTime,
                     flow.priority,
-                    flow.burstSize
+                    flow.burstSize,
+                    flow.pathDelay // Inizializza pathDelay per il Job
                 });
             }
         }
@@ -260,7 +262,8 @@ void TDMAScheduler::generateSchedule()
         TransmissionSlot slot;
         slot.flowName = selected.flowName;
         slot.senderModule = selected.senderModule;
-        slot.offset = currentTime;
+        // Applica la compensazione del pathDelay
+        slot.offset = currentTime - selected.pathDelay;
         slot.fragmentNumber = selected.fragmentNumber;
         slot.burstSize = selected.totalFragments;
         slot.instanceNumber = selected.burstInstanceNumber;
@@ -346,44 +349,40 @@ bool TDMAScheduler::checkCollisions() {
 void TDMAScheduler::assignOffsetsToSenders() {
     EV << "Assegnazione offset alle applicazioni..." << endl;
 
+    // Raggruppa tutti gli offset per ogni modulo sender
     std::map<std::string, std::vector<simtime_t>> senderFragmentOffsets;
-    std::map<std::string, simtime_t> senderTxTimes;
-
-    for (auto &slot : schedule) {
+    for (const auto& slot : schedule) {
         senderFragmentOffsets[slot.senderModule].push_back(slot.offset);
-        
-        if (senderTxTimes.find(slot.senderModule) == senderTxTimes.end()) {
-            auto it = std::find_if(flows.begin(), flows.end(),
-                [&slot](const FlowDescriptor &f) {
-                    return f.senderModule == slot.senderModule;
-                });
-            
-            if (it != flows.end()) {
-                senderTxTimes[slot.senderModule] = it->txTime;
-            }
-        }
     }
 
-    for (auto &entry : senderFragmentOffsets) {
-        std::string modulePath = std::string("^.") + entry.first;
-        cModule *senderModule = getModuleByPath(modulePath.c_str());
+    // Per ogni sender, crea la stringa di offset e passala come parametro
+    for (const auto& pair : senderFragmentOffsets) {
+        const std::string& senderModulePath = pair.first;
+        const std::vector<simtime_t>& offsets = pair.second;
 
-        if (senderModule == nullptr) {
-            EV_WARN << "Modulo non trovato: " << modulePath << endl;
+        cModule *senderModule = getModuleByPath(senderModulePath.c_str());
+        if (!senderModule) {
+            EV_WARN << "Modulo non trovato: " << senderModulePath << endl;
             continue;
         }
 
-        simtime_t firstOffset = entry.second[0];
-        senderModule->par("tdmaOffset").setDoubleValue(firstOffset.dbl());
-        
-        if (senderTxTimes.find(entry.first) != senderTxTimes.end()) {
-            simtime_t txTime = senderTxTimes[entry.first];
-            senderModule->par("fragmentTxTime").setDoubleValue(txTime.dbl());
-            
-            EV << "" << entry.first << ": offset=" << firstOffset 
-               << ", txTime=" << txTime << endl;
+        // Ordina gli offset temporalmente
+        std::vector<simtime_t> sortedOffsets = offsets;
+        std::sort(sortedOffsets.begin(), sortedOffsets.end());
+
+        // Crea una stringa con gli offset separati da virgola
+        std::stringstream ss;
+        for (size_t i = 0; i < sortedOffsets.size(); ++i) {
+            ss << sortedOffsets[i].dbl();
+            if (i < sortedOffsets.size() - 1) {
+                ss << ",";
+            }
         }
+
+        // Imposta il parametro "tdmaOffsets" nel modulo TDMASenderApp
+        senderModule->par("tdmaOffsets").setStringValue(ss.str());
+        EV << "Configurato " << senderModulePath << " con " << sortedOffsets.size() << " slot." << endl;
     }
 
-    EV << "Configurati " << senderFragmentOffsets.size() << " sender" << endl;
+    EV << "Configurati " << senderFragmentOffsets.size() << " sender." << endl;
 }

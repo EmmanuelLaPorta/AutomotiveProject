@@ -19,6 +19,7 @@ class TDMAScheduler : public cSimpleModule
         int burstSize;
         int priority;
         simtime_t txTime;
+        simtime_t pathDelay; // Nuovo campo per il ritardo di propagazione del percorso
     };
 
     struct TransmissionSlot {
