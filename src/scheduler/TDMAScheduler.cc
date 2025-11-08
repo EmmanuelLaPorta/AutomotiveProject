@@ -35,73 +35,88 @@ void TDMAScheduler::handleMessage(cMessage *msg) {
 void TDMAScheduler::defineFlows() {
     EV << "Definizione flussi..." << endl;
 
-    // NOTA: Per i flussi multicast, definiamo una sola istanza.
-    // Sarà compito dello switch replicare il pacchetto.
-    // Il senderModule path (es. "ME.senderApp[0]") deve corrispondere
-    // a quello configurato in omnetpp.ini con il MAC address multicast.
-
-    // Flow 2: ME → S1-S4 (Audio speaker) - PRIORITÀ 1 (massima) - MULTICAST
+    // Flow 2: ME → S1-S4 (Audio speaker) - PRIORITÀ 1 (massima)
     flows.push_back({
-        "flow2_Audio_Multicast", "ME.senderApp[0]",
-        SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0, SimTime(1e-6, SIMTIME_S)
+        "flow2_ME_to_S1", "ME.senderApp[0]", 
+        SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
+    });
+    flows.push_back({
+        "flow2_ME_to_S2", "ME.senderApp[1]", 
+        SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
+    });
+    flows.push_back({
+        "flow2_ME_to_S3", "ME.senderApp[2]", 
+        SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
+    });
+    flows.push_back({
+        "flow2_ME_to_S4", "ME.senderApp[3]", 
+        SimTime(0.00025, SIMTIME_S), 80, 1, 1, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
-    // Flow 7: TLM → HU, CU (Telematica) - PRIORITÀ 2 - MULTICAST
+    // Flow 7: TLM → HU, CU (Telematica) - PRIORITÀ 2
     flows.push_back({
-        "flow7_Telematics_Multicast", "TLM.senderApp[0]",
-        SimTime(0.000625, SIMTIME_S), 600, 1, 2, 0, SimTime(1e-6, SIMTIME_S)
+        "flow7_TLM_to_HU", "TLM.senderApp[0]", 
+        SimTime(0.000625, SIMTIME_S), 600, 1, 2, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
+    });
+    flows.push_back({
+        "flow7_TLM_to_CU", "TLM.senderApp[1]", 
+        SimTime(0.000625, SIMTIME_S), 600, 1, 2, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     // Flow 1: LD1, LD2 → CU (LiDAR) - PRIORITÀ 3
     flows.push_back({
-        "flow1_LD1_to_CU", "LD1.senderApp[0]",
-        SimTime(0.0014, SIMTIME_S), 1300, 1, 3, 0, SimTime(1e-6, SIMTIME_S)
+        "flow1_LD1_to_CU", "LD1.senderApp[0]", 
+        SimTime(0.0014, SIMTIME_S), 1300, 1, 3, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
     flows.push_back({
-        "flow1b_LD2_to_CU", "LD2.senderApp[0]",
-        SimTime(0.0014, SIMTIME_S), 1300, 1, 3, 0, SimTime(1e-6, SIMTIME_S)
+        "flow1b_LD2_to_CU", "LD2.senderApp[0]", 
+        SimTime(0.0014, SIMTIME_S), 1300, 1, 3, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     // Flow 4: CU → HU (Display, 7 frammenti) - PRIORITÀ 4
     flows.push_back({
-        "flow4_CU_to_HU", "CU.senderApp[0]",
-        SimTime(0.01, SIMTIME_S), 1500, 7, 4, 0, SimTime(1e-6, SIMTIME_S)
+        "flow4_CU_to_HU", "CU.senderApp[0]", 
+        SimTime(0.01, SIMTIME_S), 1500, 7, 4, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     // Flow 5: CM1 → HU (Camera frontale, 119 frammenti) - PRIORITÀ 5
     flows.push_back({
-        "flow5_CM1_to_HU", "CM1.senderApp[0]",
-        SimTime(0.01666, SIMTIME_S), 1500, 119, 5, 0, SimTime(1e-6, SIMTIME_S)
+        "flow5_CM1_to_HU", "CM1.senderApp[0]", 
+        SimTime(0.01666, SIMTIME_S), 1500, 119, 5, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
-    // Flow 6: ME → RS1, RS2 (Streaming video, 119 frammenti) - PRIORITÀ 6 - MULTICAST
+    // Flow 6: ME → RS1, RS2 (Streaming video, 119 frammenti) - PRIORITÀ 6
     flows.push_back({
-        "flow6_Video_Multicast", "ME.senderApp[1]", // Usa senderApp[1] per distinguerlo da audio
-        SimTime(0.03333, SIMTIME_S), 1500, 119, 6, 0, SimTime(1e-6, SIMTIME_S)
+        "flow6_ME_to_RS1", "ME.senderApp[4]", 
+        SimTime(0.03333, SIMTIME_S), 1500, 119, 6, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
+    });
+    flows.push_back({
+        "flow6_ME_to_RS2", "ME.senderApp[5]", 
+        SimTime(0.03333, SIMTIME_S), 1500, 119, 6, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     // Flow 8: RC → HU (Retrocamera, 119 frammenti) - PRIORITÀ 7
     flows.push_back({
-        "flow8_RC_to_HU", "RC.senderApp[0]",
-        SimTime(0.03333, SIMTIME_S), 1500, 119, 7, 0, SimTime(1e-6, SIMTIME_S)
+        "flow8_RC_to_HU", "RC.senderApp[0]", 
+        SimTime(0.03333, SIMTIME_S), 1500, 119, 7, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     // Flow 3: US1-4 → CU (Ultrasuoni) - PRIORITÀ 8 (più bassa)
     flows.push_back({
-        "flow3_US1_to_CU", "US1.senderApp[0]",
-        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0, SimTime(1e-6, SIMTIME_S)
+        "flow3_US1_to_CU", "US1.senderApp[0]", 
+        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
     flows.push_back({
-        "flow3_US2_to_CU", "US2.senderApp[0]",
-        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0, SimTime(1e-6, SIMTIME_S)
+        "flow3_US2_to_CU", "US2.senderApp[0]", 
+        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
     flows.push_back({
-        "flow3_US3_to_CU", "US3.senderApp[0]",
-        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0, SimTime(1e-6, SIMTIME_S)
+        "flow3_US3_to_CU", "US3.senderApp[0]", 
+        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
     flows.push_back({
-        "flow3_US4_to_CU", "US4.senderApp[0]",
-        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0, SimTime(1e-6, SIMTIME_S)
+        "flow3_US4_to_CU", "US4.senderApp[0]", 
+        SimTime(0.1, SIMTIME_S), 188, 1, 8, 0, SimTime(0, SIMTIME_S) // pathDelay placeholder
     });
 
     EV << "Totale flussi definiti: " << flows.size() << endl;
@@ -176,7 +191,7 @@ void TDMAScheduler::generateSchedule()
     EV << "Totale job (frammenti) da schedulare: " << allJobs.size() << endl;
 
     // ALGORITMO CORRETTO: Scheduling frame-by-frame con preemption
-    simtime_t currentTime = SimTime(1e-6, SIMTIME_S);
+    simtime_t currentTime = 0;
     const simtime_t IFG = SimTime(96, SIMTIME_NS);
     const simtime_t GUARD_TIME = SimTime(1000, SIMTIME_NS);  // Aumentato a 1µs
     
