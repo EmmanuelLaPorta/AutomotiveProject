@@ -13,24 +13,135 @@ void EtherMAC::initialize()
     rxqueue = cPacketQueue();
     ifgdur = 96.0/(double)datarate;
 
-    // Statistiche per debug
+    // Statistiche
     maxRxQueueSize = 0;
     maxTxQueueSize = 0;
+    tdmaBlockedPackets = 0;
     WATCH(maxRxQueueSize);
     WATCH(maxTxQueueSize);
+    WATCH(tdmaBlockedPackets);
 
     cValueArray *vlanArray = check_and_cast<cValueArray*>(par("vlans").objectValue());
     for (int i = 0; i < vlanArray->size(); ++i) {
         vlans.push_back((int)vlanArray->get(i).intValue());
     }
     
-    // ✅ NUOVO: Emetti stato iniziale code (entrambe vuote)
+    // ✅ NUOVO: Configurazione TDMA per switch
+    isTDMAEnabled = par("enableTDMA").boolValue();
+    tdmaTimer = nullptr;
+    currentSlotIndex = 0;
+    
+    if (isTDMAEnabled) {
+        // Gli slot TDMA verranno configurati dal TDMAScheduler
+        std::string slotsStr = par("tdmaSlots").stringValue();
+        
+        if (!slotsStr.empty()) {
+            // Parse slot TDMA: "offset1:flowName1:fragNum1,offset2:flowName2:fragNum2,..."
+            std::stringstream ss(slotsStr);
+            std::string token;
+            
+            while (std::getline(ss, token, ',')) {
+                if (token.empty()) continue;
+                
+                std::stringstream tokenStream(token);
+                std::string offsetStr, flowName, fragNumStr;
+                
+                std::getline(tokenStream, offsetStr, ':');
+                std::getline(tokenStream, flowName, ':');
+                std::getline(tokenStream, fragNumStr, ':');
+                
+                TDMASlot slot;
+                slot.offset = SimTime(std::stod(offsetStr), SIMTIME_S);
+                slot.flowName = flowName;
+                slot.fragmentNumber = std::stoi(fragNumStr);
+                
+                tdmaSlots.push_back(slot);
+            }
+            
+            std::sort(tdmaSlots.begin(), tdmaSlots.end(),
+                [](const TDMASlot &a, const TDMASlot &b) {
+                    return a.offset < b.offset;
+                });
+            
+            EV << "TDMA abilitato con " << tdmaSlots.size() << " slot configurati" << endl;
+            scheduleTDMATransmissions();
+        }
+    }
+    
     emit(registerSignal("txQueueLength"), 0);
     emit(registerSignal("rxQueueLength"), 0);
 }
 
+void EtherMAC::scheduleTDMATransmissions()
+{
+    if (!isTDMAEnabled || tdmaSlots.empty()) return;
+    
+    // Schedula il prossimo slot TDMA
+    if (currentSlotIndex < tdmaSlots.size()) {
+        if (tdmaTimer != nullptr) {
+            cancelEvent(tdmaTimer);
+            delete tdmaTimer;
+        }
+        
+        tdmaTimer = new cMessage("TDMASlot");
+        scheduleAt(tdmaSlots[currentSlotIndex].offset, tdmaTimer);
+        
+        EV_DEBUG << "Prossimo slot TDMA a t=" << tdmaSlots[currentSlotIndex].offset 
+                 << " per flow " << tdmaSlots[currentSlotIndex].flowName << endl;
+    }
+}
+
+bool EtherMAC::canTransmitNow(cPacket *pkt)
+{
+    if (!isTDMAEnabled) {
+        return true; // Nessuna restrizione TDMA
+    }
+    
+    // Controlla se siamo in uno slot TDMA valido
+    if (currentSlotIndex >= tdmaSlots.size()) {
+        return false; // Tutti gli slot esauriti
+    }
+    
+    // Verifica se il pacchetto corrisponde allo slot corrente
+    EthernetFrame *frame = dynamic_cast<EthernetFrame *>(pkt);
+    if (frame == nullptr) return false;
+    
+    cPacket *encapPkt = frame->getEncapsulatedPacket();
+    if (encapPkt == nullptr) return false;
+    
+    const TDMASlot &currentSlot = tdmaSlots[currentSlotIndex];
+    
+    // Confronta il nome del flusso
+    if (strcmp(encapPkt->getName(), currentSlot.flowName.c_str()) == 0) {
+        return true; // Match!
+    }
+    
+    return false; // Non è il momento giusto per questo pacchetto
+}
+
 void EtherMAC::handleMessage(cMessage *msg)
 {
+    // ✅ NUOVO: Gestione timer TDMA
+    if (msg->isSelfMessage() && strcmp(msg->getName(), "TDMASlot") == 0) {
+        delete msg;
+        
+        // È arrivato uno slot TDMA: prova a trasmettere
+        if (txstate == TX_STATE_IDLE && txqueue.getLength() > 0) {
+            cPacket *pkt = check_and_cast<cPacket*>(txqueue.front());
+            
+            if (canTransmitNow(pkt)) {
+                startTransmission();
+            } else {
+                EV_DEBUG << "Pacchetto in testa non corrisponde allo slot TDMA corrente" << endl;
+            }
+        }
+        
+        // Avanza allo slot successivo
+        currentSlotIndex++;
+        scheduleTDMATransmissions();
+        return;
+    }
+    
     if(msg->isSelfMessage()) {
         if(strcmp(msg->getName(), "TxTimer") == 0) {
             delete msg;
@@ -45,7 +156,6 @@ void EtherMAC::handleMessage(cMessage *msg)
         else if(strcmp(msg->getName(), "RxTimer") == 0) {
             delete msg;
             
-            // Fine ricezione
             if(rxbuf->hasBitError()) {
                 EV_DEBUG << "Frame errata ricevuta, scartata" << endl;
                 delete rxbuf;
@@ -57,11 +167,9 @@ void EtherMAC::handleMessage(cMessage *msg)
             
             rxstate = RX_STATE_IDLE;
             
-            // Processa il prossimo pacchetto in coda RX se presente
             if(rxqueue.getLength() > 0) {
                 startReception();
             } else {
-                // ✅ Emetti lunghezza coda RX (ora vuota)
                 emit(registerSignal("rxQueueLength"), 0);
             }
         }
@@ -70,7 +178,7 @@ void EtherMAC::handleMessage(cMessage *msg)
 
     cPacket *pkt = check_and_cast<cPacket *>(msg);
     
-    // ===== TRASMISSIONE (da upper layer) =====
+    // TRASMISSIONE (da upper layer)
     if(pkt->getArrivalGate() == gate("upperLayerIn")) {
         if(vlanFilter(pkt)) {
             EV_DEBUG << "VlanId non registrato, pacchetto scartato" << endl;
@@ -80,40 +188,42 @@ void EtherMAC::handleMessage(cMessage *msg)
 
         txqueue.insert(pkt);
         
-        // ✅ NUOVO: Emetti lunghezza coda TX dopo insert
         int txQLen = txqueue.getLength();
         emit(registerSignal("txQueueLength"), txQLen);
         
-        // Traccia dimensione massima coda TX
         if(txQLen > maxTxQueueSize) {
             maxTxQueueSize = txQLen;
         }
 
+        // ✅ MODIFICATO: Controlla TDMA prima di trasmettere
         if(txstate == TX_STATE_IDLE) {
-            startTransmission();
+            if (!isTDMAEnabled || canTransmitNow(pkt)) {
+                startTransmission();
+            } else {
+                // Pacchetto accodato, aspetta il suo slot TDMA
+                tdmaBlockedPackets++;
+                EV_DEBUG << "Pacchetto accodato, aspetta slot TDMA (bloccati: " 
+                         << tdmaBlockedPackets << ")" << endl;
+            }
         }
         return;
     }
 
-    // ===== RICEZIONE (da canale) =====
-    // Gestione collisioni: se stiamo già ricevendo, metti in coda
+    // RICEZIONE (da canale)
     if(rxstate != RX_STATE_IDLE) {
         EV_WARN << "Collisione in ricezione! Pacchetto accodato (rxqueue=" 
                 << rxqueue.getLength() << ")" << endl;
         rxqueue.insert(pkt);
         
-        // ✅ NUOVO: Emetti lunghezza coda RX dopo insert
         int rxQLen = rxqueue.getLength();
         emit(registerSignal("rxQueueLength"), rxQLen);
         
-        // Traccia dimensione massima coda RX
         if(rxQLen > maxRxQueueSize) {
             maxRxQueueSize = rxQLen;
         }
         return;
     }
 
-    // Inizia ricezione immediata
     rxbuf = pkt;
     rxstate = RX_STATE_RX;
     
@@ -130,8 +240,6 @@ void EtherMAC::startReception()
     }
 
     rxbuf = check_and_cast<cPacket*>(rxqueue.pop());
-    
-    // ✅ NUOVO: Emetti lunghezza coda RX dopo pop
     emit(registerSignal("rxQueueLength"), rxqueue.getLength());
     
     rxstate = RX_STATE_RX;
@@ -139,8 +247,6 @@ void EtherMAC::startReception()
     simtime_t rxdur = (double)rxbuf->getBitLength()/(double)datarate;
     cMessage *rxtim = new cMessage("RxTimer");
     scheduleAt(simTime()+rxdur, rxtim);
-    
-    EV_DEBUG << "Inizio ricezione pacchetto dalla coda RX" << endl;
 }
 
 bool EtherMAC::vlanFilter(cPacket *pkt) {
@@ -165,14 +271,11 @@ bool EtherMAC::vlanFilter(cPacket *pkt) {
 void EtherMAC::startTransmission() {
     if(txqueue.getLength() == 0) {
         txstate = TX_STATE_IDLE;
-        // ✅ NUOVO: Emetti lunghezza coda TX (ora vuota)
         emit(registerSignal("txQueueLength"), 0);
         return;
     }
 
     cPacket *pkt = txqueue.pop();
-    
-    // ✅ NUOVO: Emetti lunghezza coda TX dopo pop
     emit(registerSignal("txQueueLength"), txqueue.getLength());
     
     simtime_t txdur = (double)pkt->getBitLength()/(double)datarate;
@@ -184,12 +287,22 @@ void EtherMAC::startTransmission() {
 
 void EtherMAC::finish()
 {
-    // Stampa statistiche finali
     EV << "=== EtherMAC Statistics ===" << endl;
     EV << "Max TX Queue Size: " << maxTxQueueSize << endl;
     EV << "Max RX Queue Size: " << maxRxQueueSize << endl;
     
-    // Registra come scalari
+    if (isTDMAEnabled) {
+        EV << "TDMA Blocked Packets: " << tdmaBlockedPackets << endl;
+    }
+    
     recordScalar("maxTxQueueSize", maxTxQueueSize);
     recordScalar("maxRxQueueSize", maxRxQueueSize);
+    
+    if (isTDMAEnabled) {
+        recordScalar("tdmaBlockedPackets", tdmaBlockedPackets);
+    }
+    
+    if (tdmaTimer != nullptr) {
+        cancelAndDelete(tdmaTimer);
+    }
 }
