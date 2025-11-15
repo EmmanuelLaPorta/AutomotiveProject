@@ -1,10 +1,11 @@
-// SimpleSwitch.h
+// SimpleSwitch.h - VERSIONE MODULARE
 #ifndef SIMPLE_SWITCH_H
 #define SIMPLE_SWITCH_H
 
 #include <omnetpp.h>
 #include <queue>
 #include <map>
+#include <string>
 
 using namespace omnetpp;
 
@@ -18,13 +19,14 @@ protected:
     std::map<int, bool> portBusy;
     std::map<int, int> maxQueueSize;
     
-    // MAC Learning Table
+    // MAC Learning Table: MAC address → porta
     std::map<std::string, int> macTable;
     
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void finish() override;
     
+    void loadMacTableFromParameter();  // ✅ NUOVO: Carica da parametro NED
     void processFrame(cPacket *frame, int arrivalPort);
     void transmitFromPort(int port);
     int lookupPort(const std::string& dstMac);
