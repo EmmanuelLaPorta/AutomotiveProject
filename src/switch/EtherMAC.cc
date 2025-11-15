@@ -1,5 +1,6 @@
 #include "EtherMAC.h"
 #include "../messages/EthernetFrame_m.h"
+#include <sstream>
 
 Define_Module(EtherMAC);
 
@@ -13,7 +14,6 @@ void EtherMAC::initialize()
     rxqueue = cPacketQueue();
     ifgdur = 96.0/(double)datarate;
 
-    // Statistiche
     maxRxQueueSize = 0;
     maxTxQueueSize = 0;
     tdmaBlockedPackets = 0;
@@ -26,17 +26,15 @@ void EtherMAC::initialize()
         vlans.push_back((int)vlanArray->get(i).intValue());
     }
     
-    // ✅ NUOVO: Configurazione TDMA per switch
     isTDMAEnabled = par("enableTDMA").boolValue();
     tdmaTimer = nullptr;
     currentSlotIndex = 0;
+    isInTDMASlot = false;
     
     if (isTDMAEnabled) {
-        // Gli slot TDMA verranno configurati dal TDMAScheduler
         std::string slotsStr = par("tdmaSlots").stringValue();
         
         if (!slotsStr.empty()) {
-            // Parse slot TDMA: "offset1:flowName1:fragNum1,offset2:flowName2:fragNum2,..."
             std::stringstream ss(slotsStr);
             std::string token;
             
@@ -64,7 +62,11 @@ void EtherMAC::initialize()
                 });
             
             EV << "TDMA abilitato con " << tdmaSlots.size() << " slot configurati" << endl;
-            scheduleTDMATransmissions();
+            
+            if (!tdmaSlots.empty()) {
+                tdmaTimer = new cMessage("TDMASlot");
+                scheduleAt(tdmaSlots[0].offset, tdmaTimer);
+            }
         }
     }
     
@@ -72,37 +74,21 @@ void EtherMAC::initialize()
     emit(registerSignal("rxQueueLength"), 0);
 }
 
-void EtherMAC::scheduleTDMATransmissions()
-{
-    if (!isTDMAEnabled || tdmaSlots.empty()) return;
-    
-    // Schedula il prossimo slot TDMA
-    if (currentSlotIndex < tdmaSlots.size()) {
-        if (tdmaTimer != nullptr) {
-            cancelEvent(tdmaTimer);
-            delete tdmaTimer;
-        }
-        
-        tdmaTimer = new cMessage("TDMASlot");
-        scheduleAt(tdmaSlots[currentSlotIndex].offset, tdmaTimer);
-        
-        EV_DEBUG << "Prossimo slot TDMA a t=" << tdmaSlots[currentSlotIndex].offset 
-                 << " per flow " << tdmaSlots[currentSlotIndex].flowName << endl;
-    }
-}
-
 bool EtherMAC::canTransmitNow(cPacket *pkt)
 {
     if (!isTDMAEnabled) {
-        return true; // Nessuna restrizione TDMA
+        return true;
     }
     
-    // Controlla se siamo in uno slot TDMA valido
+    // CRITICO: Se non siamo in uno slot TDMA valido, BLOCCA
+    if (!isInTDMASlot) {
+        return false;
+    }
+    
     if (currentSlotIndex >= tdmaSlots.size()) {
-        return false; // Tutti gli slot esauriti
+        return false;
     }
     
-    // Verifica se il pacchetto corrisponde allo slot corrente
     EthernetFrame *frame = dynamic_cast<EthernetFrame *>(pkt);
     if (frame == nullptr) return false;
     
@@ -111,51 +97,92 @@ bool EtherMAC::canTransmitNow(cPacket *pkt)
     
     const TDMASlot &currentSlot = tdmaSlots[currentSlotIndex];
     
-    // Confronta il nome del flusso
     if (strcmp(encapPkt->getName(), currentSlot.flowName.c_str()) == 0) {
-        return true; // Match!
+        return true;
     }
     
-    return false; // Non è il momento giusto per questo pacchetto
+    return false;
 }
 
 void EtherMAC::handleMessage(cMessage *msg)
 {
-    // ✅ NUOVO: Gestione timer TDMA
     if (msg->isSelfMessage() && strcmp(msg->getName(), "TDMASlot") == 0) {
-        delete msg;
-        
-        // È arrivato uno slot TDMA: prova a trasmettere
+        // Apri la finestra TDMA
+        isInTDMASlot = true;
+
+        EV_DEBUG << "TDMA Slot aperto a t=" << simTime()
+                 << " per flow " << tdmaSlots[currentSlotIndex].flowName << endl;
+
+        // Prova a trasmettere se c'è qualcosa in coda
         if (txstate == TX_STATE_IDLE && txqueue.getLength() > 0) {
             cPacket *pkt = check_and_cast<cPacket*>(txqueue.front());
-            
+
             if (canTransmitNow(pkt)) {
                 startTransmission();
-            } else {
-                EV_DEBUG << "Pacchetto in testa non corrisponde allo slot TDMA corrente" << endl;
             }
         }
+
+        // --- INIZIO MODIFICA: Durata dello slot dinamica ---
+        simtime_t slotDuration;
+        const simtime_t guardTime = SimTime(2, SIMTIME_US); // 2µs di tempo di guardia
+        size_t nextSlotIndex = currentSlotIndex + 1;
+
+        if (nextSlotIndex < tdmaSlots.size()) {
+            // Calcola la durata fino al prossimo slot, meno il tempo di guardia
+            slotDuration = (tdmaSlots[nextSlotIndex].offset - simTime()) - guardTime;
+        } else {
+            // Per l'ultimo slot, usa una durata di default (non ci sono slot successivi)
+            slotDuration = SimTime(1, SIMTIME_MS); // Esempio: 1ms
+        }
+
+        // Assicurati che la durata non sia negativa
+        if (slotDuration < 0) {
+            slotDuration = 0;
+            EV_WARN << "Configurazione TDMA errata: slot si sovrappongono o guardTime troppo lungo." << endl;
+        }
         
-        // Avanza allo slot successivo
-        currentSlotIndex++;
-        scheduleTDMATransmissions();
+        // Schedula la chiusura dello slot
+        cMessage *closeSlot = new cMessage("CloseSlot");
+        scheduleAt(simTime() + slotDuration, closeSlot);
+        // --- FINE MODIFICA ---
+
         return;
     }
-    
+
+    if (msg->isSelfMessage() && strcmp(msg->getName(), "CloseSlot") == 0) {
+        delete msg;
+
+        // Chiudi la finestra TDMA
+        isInTDMASlot = false;
+
+        // Avanza allo slot successivo
+        currentSlotIndex++;
+
+        // --- INIZIO MODIFICA: Correzione Memory Leak ---
+        if (currentSlotIndex < tdmaSlots.size()) {
+            // NON creare un nuovo timer, riutilizza quello esistente.
+            // RIMOSSA: tdmaTimer = new cMessage("TDMASlot");
+            scheduleAt(tdmaSlots[currentSlotIndex].offset, tdmaTimer);
+        }
+        // --- FINE MODIFICA ---
+
+        return;
+    }
+
     if(msg->isSelfMessage()) {
         if(strcmp(msg->getName(), "TxTimer") == 0) {
             delete msg;
             cMessage *ifgtim = new cMessage("IFGTimer");
             scheduleAt(simTime()+ifgdur, ifgtim);
             txstate = TX_STATE_IFG;
-        } 
+        }
         else if(strcmp(msg->getName(), "IFGTimer") == 0) {
             delete msg;
             startTransmission();
-        } 
+        }
         else if(strcmp(msg->getName(), "RxTimer") == 0) {
             delete msg;
-            
+
             if(rxbuf->hasBitError()) {
                 EV_DEBUG << "Frame errata ricevuta, scartata" << endl;
                 delete rxbuf;
@@ -164,9 +191,9 @@ void EtherMAC::handleMessage(cMessage *msg)
                 send(rxbuf, "upperLayerOut");
                 rxbuf = nullptr;
             }
-            
+
             rxstate = RX_STATE_IDLE;
-            
+
             if(rxqueue.getLength() > 0) {
                 startReception();
             } else {
@@ -177,8 +204,7 @@ void EtherMAC::handleMessage(cMessage *msg)
     }
 
     cPacket *pkt = check_and_cast<cPacket *>(msg);
-    
-    // TRASMISSIONE (da upper layer)
+
     if(pkt->getArrivalGate() == gate("upperLayerIn")) {
         if(vlanFilter(pkt)) {
             EV_DEBUG << "VlanId non registrato, pacchetto scartato" << endl;
@@ -187,37 +213,30 @@ void EtherMAC::handleMessage(cMessage *msg)
         }
 
         txqueue.insert(pkt);
-        
+
         int txQLen = txqueue.getLength();
         emit(registerSignal("txQueueLength"), txQLen);
-        
+
         if(txQLen > maxTxQueueSize) {
             maxTxQueueSize = txQLen;
         }
 
-        // ✅ MODIFICATO: Controlla TDMA prima di trasmettere
         if(txstate == TX_STATE_IDLE) {
             if (!isTDMAEnabled || canTransmitNow(pkt)) {
                 startTransmission();
             } else {
-                // Pacchetto accodato, aspetta il suo slot TDMA
                 tdmaBlockedPackets++;
-                EV_DEBUG << "Pacchetto accodato, aspetta slot TDMA (bloccati: " 
-                         << tdmaBlockedPackets << ")" << endl;
             }
         }
         return;
     }
 
-    // RICEZIONE (da canale)
     if(rxstate != RX_STATE_IDLE) {
-        EV_WARN << "Collisione in ricezione! Pacchetto accodato (rxqueue=" 
-                << rxqueue.getLength() << ")" << endl;
         rxqueue.insert(pkt);
-        
+
         int rxQLen = rxqueue.getLength();
         emit(registerSignal("rxQueueLength"), rxQLen);
-        
+
         if(rxQLen > maxRxQueueSize) {
             maxRxQueueSize = rxQLen;
         }
@@ -226,7 +245,7 @@ void EtherMAC::handleMessage(cMessage *msg)
 
     rxbuf = pkt;
     rxstate = RX_STATE_RX;
-    
+
     simtime_t rxdur = (double)pkt->getBitLength()/(double)datarate;
     cMessage *rxtim = new cMessage("RxTimer");
     scheduleAt(simTime()+rxdur, rxtim);
@@ -259,7 +278,7 @@ bool EtherMAC::vlanFilter(cPacket *pkt) {
         return false;
     }
 
-    for(int i=0; i<vlans.size(); i++) {
+    for(size_t i=0; i<vlans.size(); i++) {
         if(vlans[i] == qf->getVlanid()) {
             return false;
         }
@@ -302,7 +321,8 @@ void EtherMAC::finish()
         recordScalar("tdmaBlockedPackets", tdmaBlockedPackets);
     }
     
-    if (tdmaTimer != nullptr) {
+    if (tdmaTimer != nullptr && tdmaTimer->isScheduled()) {
         cancelAndDelete(tdmaTimer);
+        tdmaTimer = nullptr;
     }
 }

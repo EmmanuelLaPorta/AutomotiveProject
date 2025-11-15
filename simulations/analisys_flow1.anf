@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<analysis version="2">
+    <inputs>
+        <input pattern="results/*.vec"/>
+        <input pattern="results/*.sca"/>
+    </inputs>
+    
+    <charts>
+        <!-- GRAFICO 1: E2E Delay (deve essere una linea piatta) -->
+        <chart 
+            id="e2e_delay_flow1" 
+            name="FLOW 1: End-to-End Delay (LD1→CU)" 
+            type="LINE"
+            template="linechart_mpl">
+            
+            <property name="Graph.Title" value="FLOW 1: End-to-End Delay"/>
+            <property name="X.Axis.Title" value="Tempo (s)"/>
+            <property name="Y.Axis.Title" value="Delay (ms)"/>
+            <property name="Legend.Display" value="true"/>
+            <property name="Legend.Position" value="upper right"/>
+            
+            <property name="filter" value='
+                module =~ "*.CU.receiverApp[0]" AND 
+                name =~ "E2EDelay:vector"
+            '/>
+            
+            <property name="vector_operations" value="
+                multiply 1000
+            "/>
+            
+            <property name="Line.Color" value="#2E86AB"/>
+            <property name="Line.Type" value="Solid"/>
+            
+            <property name="title" value="
+                End-to-End Delay del Flusso 1 (LiDAR → CU)
+                
+                ATTESO: Linea piatta = delay costante (deterministico)
+                Variazioni indicano problemi di schedulazione TDMA
+            "/>
+        </chart>
+        
+        <!-- GRAFICO 2: Jitter (istogramma, deve essere ~ 0) -->
+        <chart 
+            id="jitter_histogram_flow1" 
+            name="FLOW 1: Jitter Distribution" 
+            type="HISTOGRAM"
+            template="histogram_mpl">
+            
+            <property name="Graph.Title" value="FLOW 1: Jitter Distribution"/>
+            <property name="X.Axis.Title" value="Jitter (μs)"/>
+            <property name="Y.Axis.Title" value="Frequenza"/>
+            <property name="Legend.Display" value="true"/>
+            
+            <property name="filter" value='
+                module =~ "*.CU.receiverApp[0]" AND 
+                name =~ "jitter:vector"
+            '/>
+            
+            <property name="vector_operations" value="
+                multiply 1000000
+            "/>
+            
+            <property name="Hist.Bar" value="#06A77D"/>
+            <property name="bins" value="50"/>
+            
+            <property name="title" value="
+                Distribuzione Jitter del Flusso 1
+                
+                ATTESO: Tutti i valori concentrati vicino a 0
+                TDMA dovrebbe garantire jitter quasi nullo
+            "/>
+        </chart>
+        
+        <!-- GRAFICO 3A: Max TX Queue - LD1 (End System) -->
+        <chart 
+            id="tx_queue_ld1" 
+            name="FLOW 1: Max TX Queue LD1" 
+            type="BAR"
+            template="barchart_mpl">
+            
+            <property name="Graph.Title" value="FLOW 1: Max TX Queue Size - LD1"/>
+            <property name="X.Axis.Title" value="Nodo"/>
+            <property name="Y.Axis.Title" value="Max Queue Size (packets)"/>
+            
+            <property name="filter" value='
+                module =~ "*.LD1.mac" AND 
+                name =~ "txQueueLength:max"
+            '/>
+            
+            <property name="Bar.Color" value="#F18F01"/>
+            
+            <property name="title" value="
+                Dimensione Massima Coda TX - LD1
+                
+                ATTESO: ≤ 1 (TDMA dovrebbe evitare accodamento)
+                Valori > 1 indicano scheduling non ottimale
+            "/>
+        </chart>
+        
+        <!-- GRAFICO 3B: Max TX Queue - Switches -->
+        <chart 
+            id="tx_queue_switches" 
+            name="FLOW 1: Max TX Queue Switches" 
+            type="BAR"
+            template="barchart_mpl">
+            
+            <property name="Graph.Title" value="FLOW 1: Max TX Queue Size - Switches"/>
+            <property name="X.Axis.Title" value="Switch Port"/>
+            <property name="Y.Axis.Title" value="Max Queue Size (packets)"/>
+            
+            <property name="filter" value='
+                module =~ "*.switch*.port*" AND 
+                name =~ "*maxQueue"
+            '/>
+            
+            <property name="Bar.Color" value="#C73E1D"/>
+            
+            <property name="title" value="
+                Dimensione Massima Code TX - Switches
+                
+                ATTESO: Valori bassi (1-2 pacchetti)
+                Indica se ci sono colli di bottiglia
+            "/>
+        </chart>
+        
+        <!-- GRAFICO 4: E2E Delay Statistics (Box Plot) -->
+        <chart 
+            id="e2e_stats_flow1" 
+            name="FLOW 1: E2E Delay Statistics" 
+            type="BAR"
+            template="barchart_mpl">
+            
+            <property name="Graph.Title" value="FLOW 1: E2E Delay Statistics"/>
+            <property name="X.Axis.Title" value="Metric"/>
+            <property name="Y.Axis.Title" value="Delay (μs)"/>
+            
+            <property name="filter" value='
+                module =~ "*.CU.receiverApp[0]" AND 
+                (name =~ "E2EDelay:stats:mean" OR 
+                 name =~ "E2EDelay:stats:min" OR 
+                 name =~ "E2EDelay:stats:max" OR
+                 name =~ "E2EDelay:stats:stddev")
+            '/>
+            
+            <property name="groups" value="name"/>
+            
+            <property name="title" value="
+                Statistiche E2E Delay
+                
+                Mean, Min, Max, StdDev
+                ATTESO: StdDev molto basso (delay deterministico)
+            "/>
+        </chart>
+        
+        <!-- GRAFICO 5: Jitter Mean per Flow -->
+        <chart 
+            id="jitter_mean_flow1" 
+            name="FLOW 1: Mean Jitter" 
+            type="BAR"
+            template="barchart_mpl">
+            
+            <property name="Graph.Title" value="FLOW 1: Mean Jitter"/>
+            <property name="Y.Axis.Title" value="Jitter (μs)"/>
+            
+            <property name="filter" value='
+                module =~ "*.CU.receiverApp[0]" AND 
+                name =~ "jitter:stats:mean"
+            '/>
+            
+            <property name="Bar.Color" value="#06A77D"/>
+            
+            <property name="title" value="
+                Jitter Medio del Flusso 1
+                
+                ATTESO: Vicino a 0 (< 1 μs)
+                TDMA elimina la variabilità
+            "/>
+        </chart>
+        
+    </charts>
+</analysis>

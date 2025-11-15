@@ -1,30 +1,30 @@
-#ifndef __AUTOMOTIVETDMANETWORK_TDMASENDERAPP_H_
-#define __AUTOMOTIVETDMANETWORK_TDMASENDERAPP_H_
+// TDMASenderApp.h
+#ifndef TDMA_SENDER_APP_H
+#define TDMA_SENDER_APP_H
 
 #include <omnetpp.h>
+#include <vector>
+#include <sstream>
 
 using namespace omnetpp;
-using namespace std;
 
 class TDMASenderApp : public cSimpleModule {
-  protected:
+protected:
     std::string name;
     int payloadSize;
-    int burstSize;
     std::string destAddr;
     std::string srcAddr;
-
-    // Nuova gestione della schedulazione
-    std::string tdmaOffsets; // Stringa ricevuta dal TDMAScheduler
-    std::vector<simtime_t> scheduled_offsets; // Vettore degli offset di trasmissione
-    int fragmentsSentInBurst;
-
-    // Numero del burst corrente (per gestire il ciclo sull'iperperiodo)
-    int currentBurstNumber;
-
+    simtime_t period;
+    
+    std::vector<simtime_t> txSlots;
+    int currentSlot;
+    int totalPacketsSent;
+    
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
-    virtual void sendFragment(int fragmentNumber);
+    virtual void finish() override;
+    
+    void sendPacket(int pktNumber);
 };
 
 #endif

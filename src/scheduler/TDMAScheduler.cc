@@ -41,7 +41,7 @@ void TDMAScheduler::handleMessage(cMessage *msg) {
 
 void TDMAScheduler::buildNetworkTopology() {
     EV << "=== Costruzione topologia di rete ===" << endl;
-    
+
     // Mappa MAC → Nome nodo
     topology.macToNode["00:00:00:00:00:01"] = "TLM";
     topology.macToNode["00:00:00:00:00:02"] = "US1";
@@ -61,114 +61,114 @@ void TDMAScheduler::buildNetworkTopology() {
     topology.macToNode["00:00:00:00:00:10"] = "US3";
     topology.macToNode["00:00:00:00:00:11"] = "S4";
     topology.macToNode["00:00:00:00:00:12"] = "RS1";
-    
+
     // ✅ CORREZIONE: Definizione connessioni BIDIREZIONALI esplicite
-    
+
     // Switch1 - End Systems
     topology.connections["TLM"].push_back("switch1");
     topology.connections["switch1"].push_back("TLM");
-    
+
     topology.connections["US1"].push_back("switch1");
     topology.connections["switch1"].push_back("US1");
-    
+
     topology.connections["LD1"].push_back("switch1");
     topology.connections["switch1"].push_back("LD1");
-    
+
     topology.connections["CM1"].push_back("switch1");
     topology.connections["switch1"].push_back("CM1");
-    
+
     topology.connections["S1"].push_back("switch1");
     topology.connections["switch1"].push_back("S1");
-    
+
     topology.connections["HU"].push_back("switch1");
     topology.connections["switch1"].push_back("HU");
-    
+
     // Switch2 - End Systems
     topology.connections["CU"].push_back("switch2");
     topology.connections["switch2"].push_back("CU");
-    
+
     topology.connections["S2"].push_back("switch2");
     topology.connections["switch2"].push_back("S2");
-    
+
     topology.connections["US2"].push_back("switch2");
     topology.connections["switch2"].push_back("US2");
-    
+
     topology.connections["LD2"].push_back("switch2");
     topology.connections["switch2"].push_back("LD2");
-    
+
     // Switch3 - End Systems
     topology.connections["ME"].push_back("switch3");
     topology.connections["switch3"].push_back("ME");
-    
+
     topology.connections["US4"].push_back("switch3");
     topology.connections["switch3"].push_back("US4");
-    
+
     topology.connections["S3"].push_back("switch3");
     topology.connections["switch3"].push_back("S3");
-    
+
     topology.connections["RS2"].push_back("switch3");
     topology.connections["switch3"].push_back("RS2");
-    
+
     // Switch4 - End Systems
     topology.connections["RC"].push_back("switch4");
     topology.connections["switch4"].push_back("RC");
-    
+
     topology.connections["US3"].push_back("switch4");
     topology.connections["switch4"].push_back("US3");
-    
+
     topology.connections["S4"].push_back("switch4");
     topology.connections["switch4"].push_back("S4");
-    
+
     topology.connections["RS1"].push_back("switch4");
     topology.connections["switch4"].push_back("RS1");
-    
+
     // ✅ Inter-switch connections (BIDIREZIONALI)
     topology.connections["switch1"].push_back("switch2");
     topology.connections["switch2"].push_back("switch1");
-    
+
     topology.connections["switch1"].push_back("switch3");
     topology.connections["switch3"].push_back("switch1");
-    
+
     topology.connections["switch2"].push_back("switch4");
     topology.connections["switch4"].push_back("switch2");
-    
+
     topology.connections["switch3"].push_back("switch4");
     topology.connections["switch4"].push_back("switch3");
-    
+
     EV << "Topologia costruita: " << topology.macToNode.size() << " end-systems, 4 switch" << endl;
 }
 
 std::vector<TDMAScheduler::PathHop> TDMAScheduler::findPath(
     const std::string& srcMac, const std::string& dstMac) {
-    
+
     std::vector<PathHop> path;
-    
+
     std::string srcNode = topology.macToNode[srcMac];
     std::string dstNode = topology.macToNode[dstMac];
-    
-    EV_DEBUG << "Calcolo percorso: " << srcNode << " (" << srcMac << ") → " 
+
+    EV_DEBUG << "Calcolo percorso: " << srcNode << " (" << srcMac << ") → "
              << dstNode << " (" << dstMac << ")" << endl;
-    
+
     // BFS per trovare il percorso più breve
     std::map<std::string, std::string> parent;
     std::queue<std::string> queue;
     std::set<std::string> visited;
-    
+
     queue.push(srcNode);
     visited.insert(srcNode);
     parent[srcNode] = "";
-    
+
     bool found = false;
-    
+
     while (!queue.empty() && !found) {
         std::string current = queue.front();
         queue.pop();
-        
+
         if (current == dstNode) {
             found = true;
             break;
         }
-        
+
         // Esplora tutti i vicini
         auto it = topology.connections.find(current);
         if (it != topology.connections.end()) {
@@ -177,52 +177,52 @@ std::vector<TDMAScheduler::PathHop> TDMAScheduler::findPath(
                     visited.insert(neighbor);
                     parent[neighbor] = current;
                     queue.push(neighbor);
-                    
+
                     EV_DEBUG << "  BFS: " << current << " → " << neighbor << endl;
                 }
             }
         }
     }
-    
+
     // Ricostruisci il percorso
     if (!found || parent.find(dstNode) == parent.end()) {
         EV_ERROR << "Nessun percorso trovato tra " << srcNode << " e " << dstNode << endl;
         EV_ERROR << "Nodi visitati: " << visited.size() << endl;
         return path;
     }
-    
+
     std::vector<std::string> reversePath;
     std::string current = dstNode;
     while (current != "") {
         reversePath.push_back(current);
         current = parent[current];
     }
-    
+
     std::reverse(reversePath.begin(), reversePath.end());
-    
+
     EV << "Percorso trovato (" << reversePath.size() << " nodi): ";
     for (const auto& node : reversePath) {
         EV << node << " → ";
     }
     EV << "END" << endl;
-    
+
     // Costruisci PathHop
     for (size_t i = 0; i < reversePath.size(); ++i) {
         PathHop hop;
         hop.nodeName = reversePath[i];
         hop.ingressPort = -1;  // Semplificato
         hop.egressPort = -1;   // Semplificato
-        
+
         // Calcola delay per questo hop
         if (reversePath[i].find("switch") != std::string::npos) {
             hop.hopDelay = switchingDelay + propagationDelay;
         } else {
             hop.hopDelay = propagationDelay;
         }
-        
+
         path.push_back(hop);
     }
-    
+
     return path;
 }
 
@@ -318,14 +318,14 @@ void TDMAScheduler::defineFlows() {
 
 void TDMAScheduler::calculateFlowPaths() {
     EV << "=== Calcolo percorsi dei flussi ===" << endl;
-    
+
     for (auto& flow : flows) {
         flow.path = findPath(flow.srcAddress, flow.dstAddress);
-        
+
         if (flow.path.empty()) {
             error("Impossibile trovare percorso per %s", flow.flowName.c_str());
         }
-        
+
         EV << "Flow " << flow.flowName << ": " << flow.path.size() << " hop" << endl;
     }
 }
@@ -352,28 +352,28 @@ int TDMAScheduler::calculateTransmissionsInHyperperiod(simtime_t period) {
 
 simtime_t TDMAScheduler::calculateEndToEndDelay(const FlowDescriptor& flow) {
     simtime_t totalDelay = 0;
-    
+
     // Trasmissione iniziale
     totalDelay += flow.txTime;
-    
+
     // Ritardi degli hop intermedi (switch)
     for (const auto& hop : flow.path) {
         if (hop.nodeName.find("switch") != std::string::npos) {
             totalDelay += hop.hopDelay + flow.txTime; // switching + ritrasmissione
         }
     }
-    
+
     return totalDelay;
 }
 
-int TDMAScheduler::determineEgressPort(const std::string& switchName, 
-                                       const std::vector<PathHop>& path, 
+int TDMAScheduler::determineEgressPort(const std::string& switchName,
+                                       const std::vector<PathHop>& path,
                                        size_t currentHopIndex) {
     // Determina la porta di uscita in base al prossimo hop
     if (currentHopIndex + 1 >= path.size()) {
         return -1; // Ultimo hop
     }
-    
+
     const std::string& nextHop = path[currentHopIndex + 1].nodeName;
     
     // Mappa delle connessioni inter-switch e switch-to-end-system
@@ -482,7 +482,7 @@ void TDMAScheduler::generateSchedule()
 
     while (scheduledCount < totalJobs) {
         std::vector<int> readyJobIndices;
-        
+
         for (size_t i = 0; i < allJobs.size(); ++i) {
             if (scheduledJobs.find(i) == scheduledJobs.end() &&
                 allJobs[i].releaseTime <= currentTime) {
@@ -492,7 +492,7 @@ void TDMAScheduler::generateSchedule()
 
         if (readyJobIndices.empty()) {
             simtime_t nextRelease = hyperperiod;
-            
+
             for (size_t i = 0; i < allJobs.size(); ++i) {
                 if (scheduledJobs.find(i) == scheduledJobs.end() &&
                     allJobs[i].releaseTime > currentTime &&
@@ -500,7 +500,7 @@ void TDMAScheduler::generateSchedule()
                     nextRelease = allJobs[i].releaseTime;
                 }
             }
-            
+
             if (nextRelease >= hyperperiod) break;
             currentTime = nextRelease;
             continue;
@@ -511,20 +511,20 @@ void TDMAScheduler::generateSchedule()
             [&allJobs](int a, int b) {
                 const Job& jobA = allJobs[a];
                 const Job& jobB = allJobs[b];
-                
+
                 if (jobA.priority != jobB.priority) {
                     return jobA.priority < jobB.priority;
                 }
-                
+
                 if (jobA.flowName == jobB.flowName &&
                     jobA.burstInstanceNumber == jobB.burstInstanceNumber) {
                     return jobA.fragmentNumber < jobB.fragmentNumber;
                 }
-                
+
                 if (jobA.deadline != jobB.deadline) {
                     return jobA.deadline < jobB.deadline;
                 }
-                
+
                 return jobA.fragmentNumber < jobB.fragmentNumber;
             });
 
@@ -534,7 +534,7 @@ void TDMAScheduler::generateSchedule()
 
         // CRITICAL: Coordina trasmissione attraverso tutti gli hop
         simtime_t hopStartTime = currentTime;
-        
+
         // Slot per end-system (primo hop)
         TransmissionSlot slot;
         slot.flowName = selected.flowName;
@@ -546,7 +546,7 @@ void TDMAScheduler::generateSchedule()
         slot.switchNode = "";
         slot.switchPort = -1;
         slot.isEndSystemTx = true;
-        
+
         schedule.push_back(slot);
         
         // Calcola quando finisce la trasmissione end-system
@@ -555,15 +555,15 @@ void TDMAScheduler::generateSchedule()
         // ✅ MODIFICATO: Crea slot per OGNI switch nel percorso
         for (size_t hopIdx = 1; hopIdx < selected.path.size() - 1; ++hopIdx) {
             const PathHop& hop = selected.path[hopIdx];
-            
+
             if (hop.nodeName.find("switch") != std::string::npos) {
                 // Aggiungi delay di switching
                 hopStartTime += hop.hopDelay;
-                
+
                 // Determina la porta di uscita dello switch
                 // Per semplicità, usiamo una mappa predefinita delle porte
                 int egressPort = determineEgressPort(hop.nodeName, selected.path, hopIdx);
-                
+
                 if (egressPort >= 0) {
                     // Crea slot per questo switch
                     TransmissionSlot switchSlot;
@@ -576,13 +576,13 @@ void TDMAScheduler::generateSchedule()
                     switchSlot.switchNode = hop.nodeName;
                     switchSlot.switchPort = egressPort;
                     switchSlot.isEndSystemTx = false;
-                    
+
                     schedule.push_back(switchSlot);
-                    
-                    EV_DEBUG << "Switch slot: " << hop.nodeName << ":" << egressPort 
+
+                    EV_DEBUG << "Switch slot: " << hop.nodeName << ":" << egressPort
                              << " a t=" << hopStartTime << " per " << selected.flowName << endl;
                 }
-                
+
                 // Il frame viene ritrasmesso dallo switch
                 hopStartTime += selected.txTime + IFG;
             }
@@ -595,7 +595,7 @@ void TDMAScheduler::generateSchedule()
         currentTime = hopStartTime + GUARD_TIME;
 
         if (scheduledCount % 200 == 0) {
-            EV << "Progress: " << scheduledCount << "/" << totalJobs 
+            EV << "Progress: " << scheduledCount << "/" << totalJobs
                << " (" << (scheduledCount*100/totalJobs) << "%)" << endl;
         }
     }
@@ -603,7 +603,7 @@ void TDMAScheduler::generateSchedule()
     EV << "=== Schedule completato ===" << endl;
     EV << "Slot totali: " << schedule.size() << endl;
     EV << "Tempo finale: " << currentTime << endl;
-    
+
     double utilizzo = (currentTime.dbl() / hyperperiod.dbl()) * 100;
     EV << "Utilizzo canale: " << utilizzo << "%" << endl;
 }
@@ -641,7 +641,7 @@ bool TDMAScheduler::checkCollisions() {
 
         if (endTime > next.offset) {
             collisionCount++;
-            EV_ERROR << "COLLISIONE: " << current.flowName 
+            EV_ERROR << "COLLISIONE: " << current.flowName
                      << " → " << next.flowName << endl;
         }
     }
@@ -695,13 +695,13 @@ void TDMAScheduler::assignOffsetsToSenders() {
         std::string flowName;
         int fragmentNumber;
     };
-    
+
     std::map<std::string, std::vector<SwitchSlotInfo>> switchSlots;
     
     for (const auto& slot : schedule) {
         if (!slot.isEndSystemTx && !slot.switchNode.empty() && slot.switchPort >= 0) {
             std::string portKey = slot.switchNode + ".eth[" + std::to_string(slot.switchPort) + "]";
-            
+
             SwitchSlotInfo slotInfo;
             slotInfo.offset = slot.offset;
             slotInfo.flowName = slot.flowName;
@@ -716,36 +716,36 @@ void TDMAScheduler::assignOffsetsToSenders() {
     for (const auto& pair : switchSlots) {
         const std::string& portPath = pair.first;
         const std::vector<SwitchSlotInfo>& slots = pair.second;
-        
+
         cModule *portModule = getModuleByPath(portPath.c_str());
         if (!portModule) {
             EV_WARN << "Porta switch non trovata: " << portPath << endl;
             continue;
         }
-        
+
         // Ordina slot per tempo
         std::vector<SwitchSlotInfo> sortedSlots = slots;
         std::sort(sortedSlots.begin(), sortedSlots.end(),
             [](const SwitchSlotInfo &a, const SwitchSlotInfo &b) {
                 return a.offset < b.offset;
             });
-        
+
         // Crea stringa: "offset1:flowName1:fragNum1,offset2:flowName2:fragNum2,..."
         std::stringstream ss;
         for (size_t i = 0; i < sortedSlots.size(); ++i) {
-            ss << sortedSlots[i].offset.dbl() << ":" 
-               << sortedSlots[i].flowName << ":" 
+            ss << sortedSlots[i].offset.dbl() << ":"
+               << sortedSlots[i].flowName << ":"
                << sortedSlots[i].fragmentNumber;
             if (i < sortedSlots.size() - 1) ss << ",";
         }
-        
+
         portModule->par("enableTDMA").setBoolValue(true);
         portModule->par("tdmaSlots").setStringValue(ss.str());
-        
+
         configuredSwitchPorts++;
         EV << "Configurato " << portPath << " con " << sortedSlots.size() << " slot TDMA" << endl;
     }
 
-    EV << "Configurati " << senderFragmentOffsets.size() << " sender e " 
+    EV << "Configurati " << senderFragmentOffsets.size() << " sender e "
        << configuredSwitchPorts << " porte switch." << endl;
 }

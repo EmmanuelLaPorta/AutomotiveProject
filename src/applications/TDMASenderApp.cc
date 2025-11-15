@@ -1,72 +1,85 @@
+// TDMASenderApp.cc
 #include "TDMASenderApp.h"
 #include "../messages/AppPackets_m.h"
 #include "../messages/EthernetFrame_m.h"
-#include <sstream>
 
 Define_Module(TDMASenderApp);
 
-void TDMASenderApp::initialize()
-{
+void TDMASenderApp::initialize() {
     name = par("name").str();
     payloadSize = par("payloadSize");
-    burstSize = par("burstSize");
     destAddr = par("destAddr").str();
     srcAddr = par("srcAddr").str();
-    tdmaOffsets = par("tdmaOffsets").stringValue();
-
-    fragmentsSentInBurst = 0;
-
-    EV << "=== TDMASenderApp [" << name << "] === (Interleaved)" << endl;
-    EV << "Burst Size: " << burstSize << " frammenti" << endl;
-
-    // Parsing degli offset dalla stringa
-    std::stringstream ss(tdmaOffsets);
-    std::string item;
-    while (std::getline(ss, item, ',')) {
-        if (!item.empty()) {
-            scheduled_offsets.push_back(SimTime(std::stod(item), SIMTIME_S));
+    period = par("period");
+    
+    currentSlot = 0;
+    totalPacketsSent = 0;
+    
+    // Parsing degli offset TDMA dalla stringa
+    std::string offsetsStr = par("tdmaOffsets").stringValue();
+    
+    if (offsetsStr.empty()) {
+        error("tdmaOffsets non configurato per %s", name.c_str());
+    }
+    
+    std::stringstream ss(offsetsStr);
+    std::string token;
+    
+    while (std::getline(ss, token, ',')) {
+        if (!token.empty()) {
+            txSlots.push_back(SimTime(std::stod(token), SIMTIME_S));
         }
     }
-
-    EV << "Ricevuti " << scheduled_offsets.size() << " slot di trasmissione." << endl;
-
-    // Schedula un timer per ogni offset ricevuto
-    for (size_t i = 0; i < scheduled_offsets.size(); ++i) {
-        cMessage *timer = new cMessage("FragmentTimer");
-        // Usiamo il kind per sapere quale frammento inviare (1-based)
-        timer->setKind(i + 1);
-        scheduleAt(scheduled_offsets[i], timer);
-        EV_DEBUG << "Fragment " << (i+1) << " schedulato a t=" << scheduled_offsets[i] << endl;
+    
+    EV << "=== TDMASenderApp [" << name << "] ===" << endl;
+    EV << "Payload: " << payloadSize << " B" << endl;
+    EV << "Periodo: " << period << " s" << endl;
+    EV << "Slot TDMA configurati: " << txSlots.size() << endl;
+    
+    if (txSlots.size() < 3) {
+        for (const auto& slot : txSlots) {
+            EV << "  Slot: t=" << slot << " s" << endl;
+        }
+    }
+    
+    // Schedula trasmissioni per tutti gli slot
+    for (size_t i = 0; i < txSlots.size(); i++) {
+        cMessage *timer = new cMessage("SendPacket");
+        timer->setKind(i + 1);  // Packet number (1-based)
+        scheduleAt(txSlots[i], timer);
     }
 }
 
-void TDMASenderApp::handleMessage(cMessage *msg)
-{
-    if (msg->isSelfMessage() && strcmp(msg->getName(), "FragmentTimer") == 0) {
-        // Il kind del messaggio ci dice quale frammento del burst totale inviare
-        int fragmentNumber = msg->getKind();
-        sendFragment(fragmentNumber);
-
+void TDMASenderApp::handleMessage(cMessage *msg) {
+    if (msg->isSelfMessage()) {
+        int pktNumber = msg->getKind();
+        sendPacket(pktNumber);
         delete msg;
     }
 }
 
-void TDMASenderApp::sendFragment(int fragmentNumber)
-{
-    EV_DEBUG << "[" << name << "] Invio frammento " << fragmentNumber 
-             << "/" << scheduled_offsets.size() << " a t=" << simTime() << endl;
-
+void TDMASenderApp::sendPacket(int pktNumber) {
     DataPacket *pkt = new DataPacket(name.c_str());
     pkt->setByteLength(payloadSize);
     pkt->setGenTime(simTime());
-    // Il burst size ora corrisponde al numero totale di frammenti nell'iperperiodo
-    pkt->setBurstSize(scheduled_offsets.size()); 
-    pkt->setPktNumber(fragmentNumber);
-
+    pkt->setPktNumber(pktNumber);
+    pkt->setBurstSize(1);  // Single packet per period
+    
     EthTransmitReq *req = new EthTransmitReq();
     req->setSrc(srcAddr.c_str());
     req->setDst(destAddr.c_str());
     pkt->setControlInfo(req);
-
+    
     send(pkt, "lowerLayerOut");
+    totalPacketsSent++;
+    
+    EV_DEBUG << "[" << name << "] Pkt #" << pktNumber 
+             << " inviato a t=" << simTime() << " s" << endl;
+}
+
+void TDMASenderApp::finish() {
+    EV << "=== Sender " << name << " Statistics ===" << endl;
+    EV << "Pacchetti inviati: " << totalPacketsSent << endl;
+    
+    recordScalar("totalPacketsSent", totalPacketsSent);
 }

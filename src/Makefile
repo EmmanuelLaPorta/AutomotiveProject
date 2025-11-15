@@ -36,9 +36,11 @@ OBJS = \
     $O/applications/TDMAReceiverApp.o \
     $O/applications/TDMASenderApp.o \
     $O/encapsulation/EthEncap.o \
+    $O/scheduler/SimpleTDMAScheduler.o \
     $O/scheduler/TDMAScheduler.o \
     $O/switch/EtherMAC.o \
     $O/switch/RelayUnit.o \
+    $O/switch/SimpleSwitch.o \
     $O/messages/AppPackets_m.o \
     $O/messages/EthernetFrame_m.o
 

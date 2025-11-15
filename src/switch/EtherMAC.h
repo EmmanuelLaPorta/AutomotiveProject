@@ -21,7 +21,6 @@ class EtherMAC : public cSimpleModule
         RX_STATE_RX
     } rx_state_t;
 
-    // ✅ NUOVO: Struttura per TDMA slot degli switch
     struct TDMASlot {
         simtime_t offset;
         std::string flowName;
@@ -35,9 +34,6 @@ class EtherMAC : public cSimpleModule
     virtual void startTransmission();
     virtual void startReception();
     virtual bool vlanFilter(cPacket *pkt);
-    
-    // ✅ NUOVO: Gestione TDMA per switch
-    virtual void scheduleTDMATransmissions();
     virtual bool canTransmitNow(cPacket *pkt);
 
     tx_state_t txstate;
@@ -49,16 +45,15 @@ class EtherMAC : public cSimpleModule
     simtime_t ifgdur;
     std::vector<int> vlans;
     
-    // ✅ NUOVO: TDMA scheduling per switch
     bool isTDMAEnabled;
     std::vector<TDMASlot> tdmaSlots;
     size_t currentSlotIndex;
     cMessage *tdmaTimer;
+    bool isInTDMASlot;  // NUOVO: flag per finestra TDMA aperta
     
-    // Statistiche
     int maxTxQueueSize;
     int maxRxQueueSize;
-    int tdmaBlockedPackets; // Pacchetti bloccati per TDMA
+    int tdmaBlockedPackets;
 };
 
 #endif
