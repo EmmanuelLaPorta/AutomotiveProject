@@ -32,22 +32,18 @@ O = $(PROJECT_OUTPUT_DIR)/$(CONFIGNAME)/$(PROJECTRELATIVE_PATH)
 
 # Object files for local .cc, .msg and .sm files
 OBJS = \
-    $O/applications/AppDispatcher.o \
-    $O/applications/TDMAReceiverApp.o \
-    $O/applications/TDMASenderApp.o \
-    $O/encapsulation/EthEncap.o \
-    $O/scheduler/SimpleTDMAScheduler.o \
-    $O/scheduler/TDMAScheduler.o \
-    $O/switch/EtherMAC.o \
-    $O/switch/RelayUnit.o \
-    $O/switch/SimpleSwitch.o \
-    $O/messages/AppPackets_m.o \
-    $O/messages/EthernetFrame_m.o
+    $O/core/scheduler/TDMAScheduler.o \
+    $O/nodes/components/applications/TDMAReceiverApp.o \
+    $O/nodes/components/applications/TDMASenderApp.o \
+    $O/nodes/components/mac/TDMAMac.o \
+    $O/switch/TDMASwitch.o \
+    $O/messages/AppPacket_m.o \
+    $O/messages/TDMAFrame_m.o
 
 # Message files
 MSGFILES = \
-    messages/AppPackets.msg \
-    messages/EthernetFrame.msg
+    messages/AppPacket.msg \
+    messages/TDMAFrame.msg
 
 # SM files
 SMFILES =

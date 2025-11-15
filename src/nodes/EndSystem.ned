@@ -1,55 +1,44 @@
-package automotivetdmanetwork.nodes;
+// src/nodes/EndSystem.ned
+package tdma.nodes;
 
-import automotivetdmanetwork.applications.*;
-import automotivetdmanetwork.encapsulation.EthEncap;
-import automotivetdmanetwork.switch.EtherMAC;
+import tdma.nodes.components.applications.TDMASenderApp;
+import tdma.nodes.components.applications.TDMAReceiverApp;
+import tdma.nodes.components.mac.TDMAMac;
 
-module EndSystem
-{
+module EndSystem {
     parameters:
+        @display("i=device/pc");
         int numSenders = default(0);
         int numReceivers = default(0);
-        string macAddress;
-        @display("i=device/device");
+        string macAddress = default("");
+    
     gates:
         inout ethg;
+    
     submodules:
         senderApp[numSenders]: TDMASenderApp {
             @display("p=100,50,row,80");
         }
+        
         receiverApp[numReceivers]: TDMAReceiverApp {
             @display("p=300,50,row,80");
         }
-        dispatcher: AppDispatcher {
-            @display("p=200,150");
+        
+        mac: TDMAMac {
+            macAddress = parent.macAddress;
+            @display("p=200,200");
         }
-        ethEncap: EthEncap {
-            address = parent.macAddress;
-            @display("p=200,250");
-        }
-        mac: EtherMAC {
-            @display("p=200,350");
-        }
+    
     connections:
-        // Senders -> Dispatcher
+        // Senders to MAC
         for i=0..numSenders-1 {
-            senderApp[i].lowerLayerOut --> dispatcher.upperLayerIn++;
+            senderApp[i].out --> mac.upperIn;
         }
-
-        // Dispatcher -> Receivers
-        for i=0..numReceivers-1 {
-            dispatcher.upperLayerOut++ --> receiverApp[i].lowerLayerIn;
-        }
-
-        // Dispatcher <-> EthEncap
-        dispatcher.lowerLayerOut --> ethEncap.upperLayerIn;
-        dispatcher.lowerLayerIn <-- ethEncap.upperlayerOut;
-
-        // EthEncap <-> MAC
-        ethEncap.lowerLayerOut --> mac.upperLayerIn;
-        ethEncap.lowerLayerIn <-- mac.upperLayerOut;
-
-        // MAC <-> Canale esterno
-        mac.channelOut --> ethg$o;
-        mac.channelIn <-- ethg$i;
+        
+        // MAC to Receivers
+        mac.upperOut --> receiverApp[0].in if numReceivers > 0;
+        
+        // MAC to Physical
+        mac.lowerOut --> ethg$o;
+        mac.lowerIn <-- ethg$i;
 }
