@@ -6,7 +6,7 @@ simple TDMASwitch {
         @display("i=device/switch");
         int numPorts = default(4);
         double switchingDelay @unit(s) = default(5us);
-        string macTableConfig = default("");
+        string macTableConfig = default("") @mutable;  // <-- AGGIUNTO @mutable
         
         @signal[queueLength](type=long);
         @statistic[queueLength](record=vector,stats,max);

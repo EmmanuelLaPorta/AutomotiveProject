@@ -69,7 +69,7 @@ void TDMASenderApp::transmitBurst() {
         
         // Invia con piccolo delay tra frammenti
         if (i > 0) {
-            simtime_t fragmentDelay = i * (txDuration + tdma::IFG_TIME);
+            simtime_t fragmentDelay = i * (txDuration + tdma::getIfgTime());
             sendDelayed(frame, fragmentDelay, "out");
         } else {
             send(frame, "out");

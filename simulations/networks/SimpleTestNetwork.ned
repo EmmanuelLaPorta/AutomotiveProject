@@ -24,25 +24,34 @@ network SimpleTestNetwork {
 
         // Switches
         switch1: TDMASwitch {
-            numPorts = 4;
+            numPorts = 2;  // Solo 2 porte usate
             @display("p=300,300;i=device/switch");
         }
 
         switch2: TDMASwitch {
-            numPorts = 4;
+            numPorts = 3;  // Solo 3 porte usate
             @display("p=500,300;i=device/switch");
         }
 
         // End Systems
         LD1: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:03";
             @display("p=150,300");
         }
 
         LD2: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:0A";
             @display("p=500,150");
         }
 
         CU: EndSystem {
+            numSenders = 0;
+            numReceivers = 1;
+            macAddress = "00:00:00:00:00:07";
             @display("p=650,300");
         }
 

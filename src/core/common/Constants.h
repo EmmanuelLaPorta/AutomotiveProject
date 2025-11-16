@@ -4,7 +4,7 @@
 
 #include <omnetpp.h>
 
-using omnetpp::const_simtime_t;
+using namespace omnetpp;
 
 namespace tdma {
 
@@ -12,13 +12,20 @@ namespace tdma {
 const uint64_t DATARATE = 1000000000; // 1 Gbps
 const int MTU_BYTES = 1500;
 const int ETHERNET_OVERHEAD = 38; // Header + IFG + CRC
-const const_simtime_t SWITCH_DELAY = SimTime(5, SIMTIME_US);
-const const_simtime_t PROPAGATION_DELAY = SimTime(10, SIMTIME_NS);
-const const_simtime_t GUARD_TIME = SimTime(1, SIMTIME_US);
-const const_simtime_t IFG_TIME = SimTime(96, SIMTIME_NS);
 
-// TDMA parameters
-const const_simtime_t HYPERPERIOD = SimTime(100, SIMTIME_MS);
+// Time constants as inline functions to avoid global initialization
+inline SimTime getSwitchDelay() { return SimTime(5, SIMTIME_US); }
+inline SimTime getPropagationDelay() { return SimTime(10, SIMTIME_NS); }
+inline SimTime getGuardTime() { return SimTime(1, SIMTIME_US); }
+inline SimTime getIfgTime() { return SimTime(96, SIMTIME_NS); }
+inline SimTime getHyperperiod() { return SimTime(100, SIMTIME_MS); }
+
+// For backward compatibility with direct constant usage
+#define SWITCH_DELAY getSwitchDelay()
+#define PROPAGATION_DELAY getPropagationDelay()
+#define GUARD_TIME getGuardTime()
+#define IFG_TIME getIfgTime()
+#define HYPERPERIOD getHyperperiod()
 
 // Flow priorities (lower = higher priority)
 enum FlowPriority {

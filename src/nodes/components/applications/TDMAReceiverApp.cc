@@ -23,12 +23,15 @@ void TDMAReceiverApp::initialize() {
 void TDMAReceiverApp::handleMessage(cMessage *msg) {
     TDMAFrame *frame = check_and_cast<TDMAFrame*>(msg);
     
-    // Filtra per flow ID
-    if (strcmp(frame->getFlowId(), flowId.c_str()) != 0) {
+    // Filtra per flow ID - se flowId è vuoto, accetta tutto
+    if (!flowId.empty() && strcmp(frame->getFlowId(), flowId.c_str()) != 0) {
         delete frame;
         return;
     }
     
+	EV << "RICEVUTO frame con flowId: " << frame->getFlowId() 
+       << " (il mio filtro è: '" << flowId << "')" << endl;
+	
     // Calcola delay end-to-end
     simtime_t delay = simTime() - frame->getGenTime();
     

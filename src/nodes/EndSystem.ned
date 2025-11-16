@@ -29,7 +29,7 @@ module EndSystem {
             @display("p=200,200");
         }
     
-    connections:
+    connections allowunconnected:  // <-- AGGIUNTO QUESTO
         // Senders to MAC
         for i=0..numSenders-1 {
             senderApp[i].out --> mac.upperIn;

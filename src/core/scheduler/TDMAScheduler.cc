@@ -83,7 +83,7 @@ void TDMAScheduler::generateOptimizedSchedule() {
             simtime_t hopOffset = offset + flow.txTime;
             for (size_t j = 1; j < flow.path.size() - 1; j++) {
                 if (flow.path[j].find("switch") != std::string::npos) {
-                    hopOffset += tdma::SWITCH_DELAY;
+                    hopOffset += tdma::getSwitchDelay();
                     
                     schedule.push_back({
                         .flowId = flow.id,
@@ -122,7 +122,7 @@ bool TDMAScheduler::verifyNoCollisions() {
             });
         
         for (size_t i = 0; i < sortedSlots.size() - 1; i++) {
-            simtime_t endTime = sortedSlots[i].offset + sortedSlots[i].duration + tdma::IFG_TIME;
+            simtime_t endTime = sortedSlots[i].offset + sortedSlots[i].duration + tdma::getIfgTime();
             if (endTime > sortedSlots[i+1].offset) {
                 EV_ERROR << "Collisione in " << node << " tra slot " << i << " e " << i+1 << endl;
                 return false;
@@ -161,14 +161,15 @@ void TDMAScheduler::configureSwitches() {
     // Configura le tabelle MAC per ogni switch
     std::map<std::string, std::map<std::string, int>> switchTables;
     
-    // Switch1 MAC table
-    switchTables["switch1"]["00:00:00:00:00:03"] = 2; // LD1 on port 2
-    switchTables["switch1"]["00:00:00:00:00:07"] = 6; // CU via switch2 on port 6
+    // Switch1 MAC table (aggiornata per la nuova topologia)
+    switchTables["switch1"]["00:00:00:00:00:03"] = 0; // LD1 on port 0
+    switchTables["switch1"]["00:00:00:00:00:07"] = 1; // CU via switch2 on port 1
+    switchTables["switch1"]["00:00:00:00:00:0A"] = 1; // LD2 via switch2 on port 1
     
-    // Switch2 MAC table  
-    switchTables["switch2"]["00:00:00:00:00:0A"] = 3; // LD2 on port 3
-    switchTables["switch2"]["00:00:00:00:00:07"] = 0; // CU on port 0
-    switchTables["switch2"]["00:00:00:00:00:03"] = 4; // LD1 via switch1 on port 4
+    // Switch2 MAC table (aggiornata per la nuova topologia)
+    switchTables["switch2"]["00:00:00:00:00:0A"] = 1; // LD2 on port 1
+    switchTables["switch2"]["00:00:00:00:00:07"] = 2; // CU on port 2
+    switchTables["switch2"]["00:00:00:00:00:03"] = 0; // LD1 via switch1 on port 0
     
     // Applica configurazione
     for (const auto& [switchName, macTable] : switchTables) {
