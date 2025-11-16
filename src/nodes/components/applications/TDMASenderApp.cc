@@ -53,34 +53,70 @@ void TDMASenderApp::handleMessage(cMessage *msg) {
 }
 
 void TDMASenderApp::transmitBurst() {
-    for (int i = 0; i < burstSize; i++) {
-        TDMAFrame *frame = new TDMAFrame(flowId.c_str());
+    // Se destinazione multicast, crea frame per ogni speaker
+    if (dstAddr == "multicast" && flowId == "flow2") {
+        std::vector<std::string> speakers = {
+            "00:00:00:00:00:05",  // S1
+            "00:00:00:00:00:08",  // S2
+            "00:00:00:00:00:0D",  // S3
+            "00:00:00:00:00:11"   // S4
+        };
         
-        frame->setSrcAddr(srcAddr.c_str());
-        frame->setDstAddr(dstAddr.c_str());
-        frame->setFlowId(flowId.c_str());
-        frame->setSlotNumber(currentSlot);
-        frame->setFragmentNumber(i);
-        frame->setTotalFragments(burstSize);
-        frame->setGenTime(simTime());
-        frame->setTxTime(txDuration);
-        frame->setLastFragment(i == burstSize - 1);
-        frame->setByteLength(payloadSize);
-        
-        // Invia con piccolo delay tra frammenti
-        if (i > 0) {
-            simtime_t fragmentDelay = i * (txDuration + tdma::getIfgTime());
-            sendDelayed(frame, fragmentDelay, "out");
-        } else {
-            send(frame, "out");
+        for (size_t i = 0; i < speakers.size(); i++) {
+            TDMAFrame *frame = new TDMAFrame(flowId.c_str());
+            
+            frame->setSrcAddr(srcAddr.c_str());
+            frame->setDstAddr(speakers[i].c_str());
+            frame->setFlowId(flowId.c_str());
+            frame->setSlotNumber(currentSlot);
+            frame->setFragmentNumber(i);
+            frame->setTotalFragments(speakers.size());
+            frame->setGenTime(simTime());
+            frame->setTxTime(txDuration);
+            frame->setLastFragment(i == speakers.size() - 1);
+            frame->setByteLength(payloadSize);
+            
+            // Invia con piccolo delay tra frame
+            if (i > 0) {
+                simtime_t fragmentDelay = i * (txDuration + tdma::getIfgTime());
+                sendDelayed(frame, fragmentDelay, "out");
+            } else {
+                send(frame, "out");
+            }
+            
+            packetsSent++;
         }
-        
-        packetsSent++;
+    } else {
+        // Trasmissione normale (codice esistente)
+        for (int i = 0; i < burstSize; i++) {
+            TDMAFrame *frame = new TDMAFrame(flowId.c_str());
+            
+            frame->setSrcAddr(srcAddr.c_str());
+            frame->setDstAddr(dstAddr.c_str());
+            frame->setFlowId(flowId.c_str());
+            frame->setSlotNumber(currentSlot);
+            frame->setFragmentNumber(i);
+            frame->setTotalFragments(burstSize);
+            frame->setGenTime(simTime());
+            frame->setTxTime(txDuration);
+            frame->setLastFragment(i == burstSize - 1);
+            frame->setByteLength(payloadSize);
+            
+            if (i > 0) {
+                simtime_t fragmentDelay = i * (txDuration + tdma::getIfgTime());
+                sendDelayed(frame, fragmentDelay, "out");
+            } else {
+                send(frame, "out");
+            }
+            
+            packetsSent++;
+        }
     }
     
     EV_DEBUG << flowId << " transmitted burst at slot " << currentSlot 
              << " (t=" << simTime() << ")" << endl;
 }
+
 
 void TDMASenderApp::scheduleNextSlot() {
     simtime_t nextTime = txSlots[currentSlot];
