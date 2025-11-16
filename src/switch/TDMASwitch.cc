@@ -104,14 +104,18 @@ void TDMASwitch::handleSelfMessage(cMessage *msg) {
 void TDMASwitch::processAndForward(TDMAFrame *frame, int arrivalPort) {
     std::string dstMac = frame->getDstAddr();
     
+    EV << "Switch " << getName() << ": frame " << frame->getSrcAddr() 
+       << " -> " << dstMac << " (port " << arrivalPort << ")" << endl; // DEBUG
+    
     // Lookup porta di destinazione
     int destPort = -1;
     auto it = macTable.find(dstMac);
     
     if (it != macTable.end()) {
         destPort = it->second;
+        EV << "  -> instrado su porta " << destPort << endl; // DEBUG
     } else {
-        EV_WARN << "MAC " << dstMac << " not found, dropping frame" << endl;
+        EV_WARN << "MAC " << dstMac << " not found in " << getName() << ", dropping frame" << endl;
         delete frame;
         return;
     }

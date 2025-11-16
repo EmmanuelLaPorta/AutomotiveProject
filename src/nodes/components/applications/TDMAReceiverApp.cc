@@ -25,12 +25,14 @@ void TDMAReceiverApp::handleMessage(cMessage *msg) {
     
     // Filtra per flow ID - se flowId è vuoto, accetta tutto
     if (!flowId.empty() && strcmp(frame->getFlowId(), flowId.c_str()) != 0) {
+        EV_WARN << "Receiver " << getFullPath() << " scarta frame flowId=" 
+                << frame->getFlowId() << " (atteso: " << flowId << ")" << endl; // DEBUG
         delete frame;
         return;
     }
     
-	EV << "RICEVUTO frame con flowId: " << frame->getFlowId() 
-       << " (il mio filtro è: '" << flowId << "')" << endl;
+    EV << "RICEVUTO frame con flowId: " << frame->getFlowId() 
+       << " dst=" << frame->getDstAddr() << endl; // DEBUG
 	
     // Calcola delay end-to-end
     simtime_t delay = simTime() - frame->getGenTime();

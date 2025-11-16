@@ -54,6 +54,9 @@ private:
     void configureSenders();
     void configureSwitches();
     simtime_t calculateTxTime(int payloadBytes);
+    simtime_t findNextAvailableSlot(const std::string& node, simtime_t preferredTime, simtime_t duration);
+	void printScheduleDebug();
+	std::vector<std::string> getPathTo(const std::string& src, const std::string& dst);
 };
 
 #endif

@@ -52,54 +52,18 @@ void TDMAScheduler::defineFlows() {
         .path = {"LD2", "switch2", "CU"}
     });
 
-    // Flow 2: ME → 4 Speaker (Audio INFOTAINMENT)
-    // Ogni speaker è una destinazione separata per schedulazione
+    // Flow 2: ME → 4 Speaker (MULTICAST AUDIO)
+    // Trattiamo come singolo flusso con 4 destinazioni
     flows.push_back({
-        .id = "flow2_S1",
+        .id = "flow2_multicast",
         .src = "ME",
-        .dst = "S1", 
+        .dst = "S1,S2,S3,S4",  // Indica destinazioni multiple
         .srcMac = "00:00:00:00:00:0B",
-        .dstMac = "00:00:00:00:00:05",
-        .period = SimTime(250, SIMTIME_US),  // 250 μs
-        .payload = 80,  // Audio packet
-        .priority = tdma::PRIO_INFOTAINMENT,
-        .path = {"ME", "switch3", "switch1", "S1"}
-    });
-
-    flows.push_back({
-        .id = "flow2_S2",
-        .src = "ME",
-        .dst = "S2",
-        .srcMac = "00:00:00:00:00:0B", 
-        .dstMac = "00:00:00:00:00:08",
+        .dstMac = "multicast",
         .period = SimTime(250, SIMTIME_US),
         .payload = 80,
         .priority = tdma::PRIO_INFOTAINMENT,
-        .path = {"ME", "switch3", "switch1", "switch2", "S2"}
-    });
-
-    flows.push_back({
-        .id = "flow2_S3",
-        .src = "ME",
-        .dst = "S3",
-        .srcMac = "00:00:00:00:00:0B",
-        .dstMac = "00:00:00:00:00:0D",
-        .period = SimTime(250, SIMTIME_US),
-        .payload = 80,
-        .priority = tdma::PRIO_INFOTAINMENT,
-        .path = {"ME", "switch3", "S3"}  // Diretto
-    });
-
-    flows.push_back({
-        .id = "flow2_S4",
-        .src = "ME",
-        .dst = "S4",
-        .srcMac = "00:00:00:00:00:0B",
-        .dstMac = "00:00:00:00:00:11",
-        .period = SimTime(250, SIMTIME_US),
-        .payload = 80,
-        .priority = tdma::PRIO_INFOTAINMENT,
-        .path = {"ME", "switch3", "switch4", "S4"}
+        .path = {"ME", "switch3"}  // Path comune iniziale
     });
 }
 
@@ -112,47 +76,162 @@ void TDMAScheduler::generateOptimizedSchedule() {
             return a.priority < b.priority;
         });
     
-    // Per ogni flusso, calcola gli slot
+    // Calcola frame size per ogni flusso
+    for (auto& flow : flows) {
+        flow.txTime = calculateTxTime(flow.payload);
+    }
+    
+    std::map<std::string, simtime_t> nextAvailableTime;
+    
     for (auto& flow : flows) {
         int numTransmissions = (int)(hyperperiod / flow.period);
-        flow.txTime = calculateTxTime(flow.payload);
+        
+        // Controlla se è multicast
+        bool isMulticast = (flow.dst.find(',') != std::string::npos);
+        std::vector<std::string> destinations;
+        
+        if (isMulticast) {
+            // Parsing destinazioni multiple
+            std::stringstream ss(flow.dst);
+            std::string dest;
+            while (std::getline(ss, dest, ',')) {
+                destinations.push_back(dest);
+            }
+            EV << "Flow multicast " << flow.id << " verso " << destinations.size() << " destinazioni" << endl;
+        }
+        
+        EV_DEBUG << "Scheduling " << flow.id << ": " << numTransmissions 
+                 << " trasmissioni ogni " << flow.period << endl;
         
         for (int i = 0; i < numTransmissions; i++) {
-            simtime_t offset = i * flow.period;
+            simtime_t idealOffset = i * flow.period;
+            simtime_t senderStart = std::max(idealOffset, nextAvailableTime[flow.src]);
             
-            // Slot per il sender
-            schedule.push_back({
-                .flowId = flow.id,
-                .node = flow.src,
-                .offset = offset,
-                .duration = flow.txTime,
-                .type = SLOT_SENDER
-            });
-            
-            // Slot per ogni switch nel path
-            simtime_t hopOffset = offset + flow.txTime;
-            for (size_t j = 1; j < flow.path.size() - 1; j++) {
-                if (flow.path[j].find("switch") != std::string::npos) {
-                    hopOffset += tdma::getSwitchDelay();
+            if (isMulticast) {
+                // MULTICAST: alloca UN SOLO slot per ME con burst size = num destinazioni
+                schedule.push_back({
+                    .flowId = flow.id,
+                    .node = flow.src,
+                    .offset = senderStart,
+                    .duration = flow.txTime * destinations.size(), // Tempo per tutte le trasmissioni
+                    .type = SLOT_SENDER
+                });
+                
+                // Aggiorna tempo disponibile considerando tutto il burst
+                simtime_t burstDuration = flow.txTime * destinations.size() + 
+                                         tdma::getGuardTime() * (destinations.size() - 1);
+                nextAvailableTime[flow.src] = senderStart + burstDuration + tdma::getGuardTime();
+                
+                // Schedula switch per OGNI destinazione
+                for (const auto& dest : destinations) {
+                    // Determina path specifico
+                    std::vector<std::string> specificPath = getPathTo(flow.src, dest);
                     
-                    schedule.push_back({
-                        .flowId = flow.id,
-                        .node = flow.path[j],
-                        .offset = hopOffset,
-                        .duration = flow.txTime,
-                        .type = SLOT_SWITCH
-                    });
+                    simtime_t currentTime = senderStart + flow.txTime;
                     
-                    hopOffset += flow.txTime;
+                    for (size_t j = 1; j < specificPath.size() - 1; j++) {
+                        std::string node = specificPath[j];
+                        
+                        if (node.find("switch") != std::string::npos) {
+                            currentTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
+                            simtime_t switchStart = std::max(currentTime, nextAvailableTime[node]);
+                            
+                            schedule.push_back({
+                                .flowId = flow.id + "_" + dest,
+                                .node = node,
+                                .offset = switchStart,
+                                .duration = flow.txTime,
+                                .type = SLOT_SWITCH
+                            });
+                            
+                            nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
+                            currentTime = switchStart + flow.txTime;
+                        }
+                    }
+                }
+                
+            } else {
+                // UNICAST NORMALE (LiDAR)
+                schedule.push_back({
+                    .flowId = flow.id,
+                    .node = flow.src,
+                    .offset = senderStart,
+                    .duration = flow.txTime,
+                    .type = SLOT_SENDER
+                });
+                
+                nextAvailableTime[flow.src] = senderStart + flow.txTime + tdma::getGuardTime();
+                
+                simtime_t currentTime = senderStart + flow.txTime;
+                
+                for (size_t j = 1; j < flow.path.size() - 1; j++) {
+                    std::string node = flow.path[j];
+                    
+                    if (node.find("switch") != std::string::npos) {
+                        currentTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
+                        simtime_t switchStart = std::max(currentTime, nextAvailableTime[node]);
+                        
+                        schedule.push_back({
+                            .flowId = flow.id,
+                            .node = node,
+                            .offset = switchStart,
+                            .duration = flow.txTime,
+                            .type = SLOT_SWITCH
+                        });
+                        
+                        nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
+                        currentTime = switchStart + flow.txTime;
+                    }
                 }
             }
         }
     }
     
-    // Verifica collisioni
+    EV << "Schedule generato: " << schedule.size() << " slot totali" << endl;
+    
     if (!verifyNoCollisions()) {
+        printScheduleDebug();
         error("Schedule con collisioni!");
     }
+}
+
+
+simtime_t TDMAScheduler::findNextAvailableSlot(const std::string& node, simtime_t preferredTime, simtime_t duration) {
+    simtime_t candidateTime = preferredTime;
+    bool collision = true;
+    int maxAttempts = 1000;
+    int attempt = 0;
+    
+    while (collision && attempt < maxAttempts) {
+        collision = false;
+        
+        // Verifica se c'è collisione con slot esistenti
+        for (const auto& slot : schedule) {
+            if (slot.node != node) continue;
+            
+            simtime_t slotEnd = slot.offset + slot.duration + tdma::getGuardTime();
+            simtime_t candidateEnd = candidateTime + duration;
+            
+            // Controlla sovrapposizione
+            if ((candidateTime >= slot.offset && candidateTime < slotEnd) ||
+                (candidateEnd > slot.offset && candidateEnd <= slotEnd) ||
+                (candidateTime <= slot.offset && candidateEnd >= slotEnd)) {
+                
+                collision = true;
+                // Sposta dopo questo slot
+                candidateTime = slotEnd;
+                break;
+            }
+        }
+        
+        attempt++;
+    }
+    
+    if (attempt >= maxAttempts) {
+        error("Impossibile trovare slot disponibile per nodo %s", node.c_str());
+    }
+    
+    return candidateTime;
 }
 
 bool TDMAScheduler::verifyNoCollisions() {
@@ -184,70 +263,61 @@ bool TDMAScheduler::verifyNoCollisions() {
 }
 
 void TDMAScheduler::configureSenders() {
-    // Configura tutti i sender basandosi sui flussi definiti
-    std::map<std::string, std::vector<simtime_t>> senderSlots;
-    std::map<std::string, simtime_t> senderTxTime;
+    EV << "=== Configurazione Senders ===" << endl;
     
-    // Raccogli slot per ogni sender
     for (const auto& flow : flows) {
-        int numTransmissions = (int)(hyperperiod / flow.period);
-        for (int i = 0; i < numTransmissions; i++) {
-            simtime_t offset = i * flow.period;
-            senderSlots[flow.src].push_back(offset);
+        std::string path = flow.src + ".senderApp[0]";
+        cModule* sender = getModuleByPath(path.c_str());
+        
+        if (!sender) {
+            EV_WARN << "Modulo " << path << " non trovato!" << endl;
+            continue;
         }
-        senderTxTime[flow.src] = flow.txTime;
-    }
-    
-    // Configura ME per multicast (4 destinazioni)
-    cModule* me = getModuleByPath("ME.senderApp[0]");
-    if (me) {
-        // ME trasmette a 4 destinazioni contemporaneamente
+        
+        // Raccogli slot per questo sender
         std::stringstream offsets;
         bool first = true;
         
-        // Usa gli slot del primo flusso audio (sono tutti uguali)
-        int numTransmissions = (int)(hyperperiod / SimTime(250, SIMTIME_US));
-        for (int i = 0; i < numTransmissions; i++) {
-            if (!first) offsets << ",";
-            offsets << (i * 0.00025);  // 250 μs in secondi
-            first = false;
+        for (const auto& slot : schedule) {
+            if (slot.flowId == flow.id && slot.type == SLOT_SENDER) {
+                if (!first) offsets << ",";
+                offsets << slot.offset.dbl();
+                first = false;
+            }
         }
         
-        me->par("tdmaSlots").setStringValue(offsets.str());
-        me->par("txDuration").setDoubleValue(calculateTxTime(80).dbl());
-        me->par("burstSize").setIntValue(4);  // 4 frame per slot (uno per speaker)
-        me->par("flowId").setStringValue("flow2");
-        me->par("srcAddr").setStringValue("00:00:00:00:00:0B");
-        me->par("dstAddr").setStringValue("multicast");  // Destinazione multicast
-        me->par("payloadSize").setIntValue(80);
+        if (first) {
+            EV_WARN << "Nessuno slot trovato per " << flow.id << endl;
+            continue;
+        }
         
-        EV << "Configurato ME per multicast audio" << endl;
-    }
-    
-    // Configura LiDAR come prima
-    for (const auto& flow : flows) {
-        if (flow.src == "LD1" || flow.src == "LD2") {
-            cModule* sender = getModuleByPath((flow.src + ".senderApp[0]").c_str());
-            if (!sender) continue;
-            
-            std::stringstream offsets;
-            bool first = true;
-            
-            for (const auto& slot : schedule) {
-                if (slot.flowId == flow.id && slot.type == SLOT_SENDER) {
-                    if (!first) offsets << ",";
-                    offsets << slot.offset.dbl();
-                    first = false;
-                }
-            }
-            
+        try {
             sender->par("tdmaSlots").setStringValue(offsets.str());
             sender->par("txDuration").setDoubleValue(flow.txTime.dbl());
+            sender->par("flowId").setStringValue(flow.id);
+            sender->par("srcAddr").setStringValue(flow.srcMac);
+            sender->par("payloadSize").setIntValue(flow.payload);
             
-            EV << "Configurato " << flow.src << " con slot TDMA" << endl;
+            // Configura burst size e destinazione
+            if (flow.dst.find(',') != std::string::npos) {
+                // Multicast: conta destinazioni
+                int numDest = std::count(flow.dst.begin(), flow.dst.end(), ',') + 1;
+                sender->par("burstSize").setIntValue(numDest);
+                sender->par("dstAddr").setStringValue("multicast");
+            } else {
+                // Unicast
+                sender->par("burstSize").setIntValue(1);
+                sender->par("dstAddr").setStringValue(flow.dstMac);
+            }
+            
+            EV << "Configurato " << flow.src << " (" << flow.id << ")" << endl;
+            
+        } catch (cRuntimeError& e) {
+            error("Errore configurazione %s: %s", path.c_str(), e.what());
         }
     }
 }
+
 
 void TDMAScheduler::configureSwitches() {
     std::map<std::string, std::map<std::string, int>> switchTables;
@@ -312,7 +382,28 @@ void TDMAScheduler::configureSwitches() {
 }
 
 
-
+void TDMAScheduler::printScheduleDebug() {
+    std::map<std::string, std::vector<Slot>> nodeSlots;
+    
+    for (const auto& slot : schedule) {
+        nodeSlots[slot.node].push_back(slot);
+    }
+    
+    EV << "=== DEBUG SCHEDULE ===" << endl;
+    for (const auto& [node, slots] : nodeSlots) {
+        auto sorted = slots;
+        std::sort(sorted.begin(), sorted.end(),
+            [](const Slot& a, const Slot& b) { return a.offset < b.offset; });
+        
+        EV << node << " (" << sorted.size() << " slot):" << endl;
+        for (size_t i = 0; i < std::min(sorted.size(), (size_t)5); i++) {
+            EV << "  [" << i << "] t=" << sorted[i].offset 
+               << " dur=" << sorted[i].duration 
+               << " flow=" << sorted[i].flowId << endl;
+        }
+        if (sorted.size() > 5) EV << "  ... +" << (sorted.size()-5) << " slot" << endl;
+    }
+}
 
 simtime_t TDMAScheduler::calculateTxTime(int payloadBytes) {
     int totalBytes = payloadBytes + tdma::ETHERNET_OVERHEAD;
@@ -322,4 +413,23 @@ simtime_t TDMAScheduler::calculateTxTime(int payloadBytes) {
 
 void TDMAScheduler::handleMessage(cMessage *msg) {
     error("TDMAScheduler non dovrebbe ricevere messaggi");
+}
+
+std::vector<std::string> TDMAScheduler::getPathTo(const std::string& src, const std::string& dst) {
+    // Mappa dei path hard-coded per questa topologia
+    std::map<std::pair<std::string, std::string>, std::vector<std::string>> pathMap = {
+        // Da ME agli speaker
+        {{"ME", "S1"}, {"ME", "switch3", "switch1", "S1"}},
+        {{"ME", "S2"}, {"ME", "switch3", "switch1", "switch2", "S2"}},
+        {{"ME", "S3"}, {"ME", "switch3", "S3"}},
+        {{"ME", "S4"}, {"ME", "switch3", "switch4", "S4"}},
+    };
+    
+    auto key = std::make_pair(src, dst);
+    if (pathMap.find(key) != pathMap.end()) {
+        return pathMap[key];
+    }
+    
+    EV_WARN << "Path non trovato per " << src << " -> " << dst << endl;
+    return {src, dst};
 }

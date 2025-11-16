@@ -53,14 +53,16 @@ void TDMASenderApp::handleMessage(cMessage *msg) {
 }
 
 void TDMASenderApp::transmitBurst() {
-    // Se destinazione multicast, crea frame per ogni speaker
-    if (dstAddr == "multicast" && flowId == "flow2") {
+     // Se destinazione multicast, crea frame per ogni speaker
+    if (dstAddr == "multicast" && flowId.find("flow2") != std::string::npos) {
         std::vector<std::string> speakers = {
             "00:00:00:00:00:05",  // S1
             "00:00:00:00:00:08",  // S2
             "00:00:00:00:00:0D",  // S3
             "00:00:00:00:00:11"   // S4
         };
+        
+        EV << "ME trasmissione multicast a " << speakers.size() << " speaker" << endl; // DEBUG
         
         for (size_t i = 0; i < speakers.size(); i++) {
             TDMAFrame *frame = new TDMAFrame(flowId.c_str());
@@ -75,6 +77,8 @@ void TDMASenderApp::transmitBurst() {
             frame->setTxTime(txDuration);
             frame->setLastFragment(i == speakers.size() - 1);
             frame->setByteLength(payloadSize);
+            
+            EV << "  Frame " << i << " verso " << speakers[i] << endl; // DEBUG
             
             // Invia con piccolo delay tra frame
             if (i > 0) {
