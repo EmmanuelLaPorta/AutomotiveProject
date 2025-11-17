@@ -24,7 +24,7 @@ network FullAutomotiveNetwork {
 
         // ===== 4 SWITCH =====
         switch1: TDMASwitch {
-            numPorts = 4;  // Solo 4 porte usate: S1, LD1, switch2, switch3
+            numPorts = 5;
             @display("p=300,300;i=device/switch");
         }
 
@@ -43,7 +43,7 @@ network FullAutomotiveNetwork {
             @display("p=700,500;i=device/switch");
         }
 
-        
+
         LD1: EndSystem {
             numSenders = 1;
             numReceivers = 0;
@@ -71,7 +71,7 @@ network FullAutomotiveNetwork {
 			macAddress = "00:00:00:00:00:06";
 			@display("p=200,300");
 		}
-        
+
         ME: EndSystem {
             numSenders = 1;
             numReceivers = 0;
@@ -113,7 +113,7 @@ network FullAutomotiveNetwork {
         LD1.ethg <--> GigabitEthernet <--> switch1.port[1];
         switch1.port[2] <--> GigabitEthernet <--> switch2.port[0];
         switch1.port[3] <--> GigabitEthernet <--> switch3.port[1];
-		HU.ethg <--> GigabitEthernet <--> switch1.port[5];
+		HU.ethg <--> GigabitEthernet <--> switch1.port[4];
 
         // === SWITCH 2 (5 porte) ===
         // port[0] già connessa a switch1

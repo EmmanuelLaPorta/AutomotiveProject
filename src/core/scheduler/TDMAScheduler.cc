@@ -411,46 +411,46 @@ void TDMAScheduler::configureSwitches() {
     std::map<std::string, std::map<std::string, int>> switchTables;
     
     // Switch1 MAC table
-    switchTables["switch1"]["00:00:00:00:00:05"] = 0; // S1 on port 0
-    switchTables["switch1"]["00:00:00:00:00:03"] = 1; // LD1 on port 1
-    switchTables["switch1"]["00:00:00:00:00:07"] = 2; // CU via switch2
-    switchTables["switch1"]["00:00:00:00:00:0A"] = 2; // LD2 via switch2
-    switchTables["switch1"]["00:00:00:00:00:08"] = 2; // S2 via switch2
-    switchTables["switch1"]["00:00:00:00:00:0B"] = 3; // ME via switch3
-    switchTables["switch1"]["00:00:00:00:00:0D"] = 3; // S3 via switch3
-    switchTables["switch1"]["00:00:00:00:00:11"] = 2; // S4 via switch2->switch4
-    switchTables["switch1"]["00:00:00:00:00:06"] = 5; // HU on port 5 (FLOW 4)
+    switchTables["switch1"]["00:00:00:00:00:05"] = 0; // S1
+    switchTables["switch1"]["00:00:00:00:00:03"] = 1; // LD1
+    switchTables["switch1"]["00:00:00:00:00:07"] = 2; // CU
+    switchTables["switch1"]["00:00:00:00:00:0A"] = 2; // LD2
+    switchTables["switch1"]["00:00:00:00:00:08"] = 2; // S2
+    switchTables["switch1"]["00:00:00:00:00:0B"] = 3; // ME
+    switchTables["switch1"]["00:00:00:00:00:0D"] = 3; // S3
+    switchTables["switch1"]["00:00:00:00:00:11"] = 2; // S4
+    switchTables["switch1"]["00:00:00:00:00:06"] = 4; // HU
     
     // Switch2 MAC table
-    switchTables["switch2"]["00:00:00:00:00:08"] = 1; // S2 on port 1
-    switchTables["switch2"]["00:00:00:00:00:0A"] = 2; // LD2 on port 2
-    switchTables["switch2"]["00:00:00:00:00:07"] = 3; // CU on port 3
-    switchTables["switch2"]["00:00:00:00:00:03"] = 0; // LD1 via switch1
-    switchTables["switch2"]["00:00:00:00:00:05"] = 0; // S1 via switch1
-    switchTables["switch2"]["00:00:00:00:00:0B"] = 0; // ME via switch1->switch3
-    switchTables["switch2"]["00:00:00:00:00:0D"] = 0; // S3 via switch1->switch3
-    switchTables["switch2"]["00:00:00:00:00:11"] = 4; // S4 via switch4
-    switchTables["switch2"]["00:00:00:00:00:06"] = 0; // HU via switch1 (FLOW 4)
+    switchTables["switch2"]["00:00:00:00:00:08"] = 1; // S2
+    switchTables["switch2"]["00:00:00:00:00:0A"] = 2; // LD2
+    switchTables["switch2"]["00:00:00:00:00:07"] = 3; // CU
+    switchTables["switch2"]["00:00:00:00:00:03"] = 0; // LD1
+    switchTables["switch2"]["00:00:00:00:00:05"] = 0; // S1
+    switchTables["switch2"]["00:00:00:00:00:0B"] = 0; // ME
+    switchTables["switch2"]["00:00:00:00:00:0D"] = 0; // S3
+    switchTables["switch2"]["00:00:00:00:00:11"] = 4; // S4
+    switchTables["switch2"]["00:00:00:00:00:06"] = 0; // HU
     
     // Switch3 MAC table  
-    switchTables["switch3"]["00:00:00:00:00:0B"] = 0; // ME on port 0
-    switchTables["switch3"]["00:00:00:00:00:0D"] = 2; // S3 on port 2
-    switchTables["switch3"]["00:00:00:00:00:05"] = 1; // S1 via switch1
-    switchTables["switch3"]["00:00:00:00:00:08"] = 1; // S2 via switch1->switch2
-    switchTables["switch3"]["00:00:00:00:00:11"] = 3; // S4 via switch4
-    switchTables["switch3"]["00:00:00:00:00:03"] = 1; // LD1 via switch1
-    switchTables["switch3"]["00:00:00:00:00:0A"] = 1; // LD2 via switch1->switch2
-    switchTables["switch3"]["00:00:00:00:00:07"] = 1; // CU via switch1->switch2
+    switchTables["switch3"]["00:00:00:00:00:0B"] = 0; // ME
+    switchTables["switch3"]["00:00:00:00:00:0D"] = 2; // S3
+    switchTables["switch3"]["00:00:00:00:00:05"] = 1; // S1
+    switchTables["switch3"]["00:00:00:00:00:08"] = 1; // S2
+    switchTables["switch3"]["00:00:00:00:00:11"] = 3; // S4
+    switchTables["switch3"]["00:00:00:00:00:03"] = 1; // LD1
+    switchTables["switch3"]["00:00:00:00:00:0A"] = 1; // LD2
+    switchTables["switch3"]["00:00:00:00:00:07"] = 1; // CU
     
     // Switch4 MAC table
-    switchTables["switch4"]["00:00:00:00:00:11"] = 2; // S4 on port 2
-    switchTables["switch4"]["00:00:00:00:00:0B"] = 1; // ME via switch3
-    switchTables["switch4"]["00:00:00:00:00:0D"] = 1; // S3 via switch3
-    switchTables["switch4"]["00:00:00:00:00:05"] = 0; // S1 via switch2->switch1
-    switchTables["switch4"]["00:00:00:00:00:08"] = 0; // S2 via switch2
-    switchTables["switch4"]["00:00:00:00:00:03"] = 0; // LD1 via switch2->switch1
-    switchTables["switch4"]["00:00:00:00:00:0A"] = 0; // LD2 via switch2
-    switchTables["switch4"]["00:00:00:00:00:07"] = 0; // CU via switch2
+    switchTables["switch4"]["00:00:00:00:00:11"] = 2; // S4
+    switchTables["switch4"]["00:00:00:00:00:0B"] = 1; // ME
+    switchTables["switch4"]["00:00:00:00:00:0D"] = 1; // S3
+    switchTables["switch4"]["00:00:00:00:00:05"] = 0; // S1
+    switchTables["switch4"]["00:00:00:00:00:08"] = 0; // S2
+    switchTables["switch4"]["00:00:00:00:00:03"] = 0; // LD1
+    switchTables["switch4"]["00:00:00:00:00:0A"] = 0; // LD2
+    switchTables["switch4"]["00:00:00:00:00:07"] = 0; // CU
     
     // Applica configurazione
     for (const auto& [switchName, macTable] : switchTables) {
