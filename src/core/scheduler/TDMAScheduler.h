@@ -22,6 +22,8 @@ public:
         int priority;
         std::vector<std::string> path;
         simtime_t txTime;
+		bool isFragmented = false;
+		int fragmentCount = 1;
     };
     
     enum SlotType {

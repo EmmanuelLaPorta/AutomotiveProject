@@ -43,7 +43,7 @@ network FullAutomotiveNetwork {
             @display("p=700,500;i=device/switch");
         }
 
-        // ===== NODI FLUSSO 1 (LiDAR) - Posizioni dal tuo disegno =====
+        
         LD1: EndSystem {
             numSenders = 1;
             numReceivers = 0;
@@ -59,13 +59,19 @@ network FullAutomotiveNetwork {
         }
 
         CU: EndSystem {
-            numSenders = 0;
+            numSenders = 1;
             numReceivers = 1;
             macAddress = "00:00:00:00:00:07";
             @display("p=800,400");
         }
 
-        // ===== NODI FLUSSO 2 (Audio) - Posizioni dal tuo disegno =====
+		HU: EndSystem {
+			numSenders = 0;
+			numReceivers = 1;
+			macAddress = "00:00:00:00:00:06";
+			@display("p=200,300");
+		}
+        
         ME: EndSystem {
             numSenders = 1;
             numReceivers = 0;
@@ -107,6 +113,7 @@ network FullAutomotiveNetwork {
         LD1.ethg <--> GigabitEthernet <--> switch1.port[1];
         switch1.port[2] <--> GigabitEthernet <--> switch2.port[0];
         switch1.port[3] <--> GigabitEthernet <--> switch3.port[1];
+		HU.ethg <--> GigabitEthernet <--> switch1.port[5];
 
         // === SWITCH 2 (5 porte) ===
         // port[0] già connessa a switch1

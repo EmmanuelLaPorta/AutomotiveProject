@@ -37,7 +37,10 @@ void TDMAScheduler::defineFlows() {
         .period = SimTime(1.4, SIMTIME_MS),
         .payload = 1300,
         .priority = tdma::PRIO_CRITICAL_SAFETY,
-        .path = {"LD1", "switch1", "switch2", "CU"}
+        .path = {"LD1", "switch1", "switch2", "CU"},
+        .txTime = SimTime(0),
+        .isFragmented = false,
+        .fragmentCount = 1
     });
     
     flows.push_back({
@@ -49,21 +52,42 @@ void TDMAScheduler::defineFlows() {
         .period = SimTime(1.4, SIMTIME_MS),
         .payload = 1300,
         .priority = tdma::PRIO_CRITICAL_SAFETY,
-        .path = {"LD2", "switch2", "CU"}
+        .path = {"LD2", "switch2", "CU"},
+        .txTime = SimTime(0),
+        .isFragmented = false,
+        .fragmentCount = 1
     });
 
     // Flow 2: ME → 4 Speaker (MULTICAST AUDIO)
-    // Trattiamo come singolo flusso con 4 destinazioni
     flows.push_back({
         .id = "flow2_multicast",
         .src = "ME",
-        .dst = "S1,S2,S3,S4",  // Indica destinazioni multiple
+        .dst = "S1,S2,S3,S4",
         .srcMac = "00:00:00:00:00:0B",
         .dstMac = "multicast",
         .period = SimTime(250, SIMTIME_US),
         .payload = 80,
         .priority = tdma::PRIO_INFOTAINMENT,
-        .path = {"ME", "switch3"}  // Path comune iniziale
+        .path = {"ME", "switch3"},
+        .txTime = SimTime(0),
+        .isFragmented = false,
+        .fragmentCount = 1
+    });
+    
+    // Flow 4: CU → HU (CONTROL DATA - FRAGMENTED)
+    flows.push_back({
+        .id = "flow4",
+        .src = "CU",
+        .dst = "HU",
+        .srcMac = "00:00:00:00:00:07",
+        .dstMac = "00:00:00:00:00:06",
+        .period = SimTime(10, SIMTIME_MS),
+        .payload = 10500,
+        .priority = tdma::PRIO_CONTROL,
+        .path = {"CU", "switch2", "switch1", "HU"},
+        .txTime = SimTime(0),
+        .isFragmented = true,
+        .fragmentCount = 7  // 10500 / 1500 = 7 frammenti
     });
 }
 
@@ -78,7 +102,18 @@ void TDMAScheduler::generateOptimizedSchedule() {
     
     // Calcola frame size per ogni flusso
     for (auto& flow : flows) {
-        flow.txTime = calculateTxTime(flow.payload);
+        if (flow.isFragmented) {
+            // Per flussi frammentati, calcola tempo per UN frammento
+            int fragmentSize = (flow.payload <= tdma::MTU_BYTES) ? 
+                              flow.payload : tdma::MTU_BYTES;
+            flow.txTime = calculateTxTime(fragmentSize);
+            
+            EV << "Flow " << flow.id << " frammentato: " 
+               << flow.fragmentCount << " frammenti da " 
+               << fragmentSize << " byte, txTime=" << flow.txTime << endl;
+        } else {
+            flow.txTime = calculateTxTime(flow.payload);
+        }
     }
     
     std::map<std::string, simtime_t> nextAvailableTime;
@@ -113,7 +148,7 @@ void TDMAScheduler::generateOptimizedSchedule() {
                     .flowId = flow.id,
                     .node = flow.src,
                     .offset = senderStart,
-                    .duration = flow.txTime * destinations.size(), // Tempo per tutte le trasmissioni
+                    .duration = flow.txTime * destinations.size(),
                     .type = SLOT_SENDER
                 });
                 
@@ -124,7 +159,6 @@ void TDMAScheduler::generateOptimizedSchedule() {
                 
                 // Schedula switch per OGNI destinazione
                 for (const auto& dest : destinations) {
-                    // Determina path specifico
                     std::vector<std::string> specificPath = getPathTo(flow.src, dest);
                     
                     simtime_t currentTime = senderStart + flow.txTime;
@@ -151,36 +185,84 @@ void TDMAScheduler::generateOptimizedSchedule() {
                 }
                 
             } else {
-                // UNICAST NORMALE (LiDAR)
-                schedule.push_back({
-                    .flowId = flow.id,
-                    .node = flow.src,
-                    .offset = senderStart,
-                    .duration = flow.txTime,
-                    .type = SLOT_SENDER
-                });
-                
-                nextAvailableTime[flow.src] = senderStart + flow.txTime + tdma::getGuardTime();
-                
-                simtime_t currentTime = senderStart + flow.txTime;
-                
-                for (size_t j = 1; j < flow.path.size() - 1; j++) {
-                    std::string node = flow.path[j];
+                // UNICAST (con possibile frammentazione)
+                if (flow.isFragmented) {
+                    // Gestione flusso frammentato
+                    EV_DEBUG << "Scheduling fragmented flow " << flow.id 
+                             << " with " << flow.fragmentCount << " fragments" << endl;
                     
-                    if (node.find("switch") != std::string::npos) {
-                        currentTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
-                        simtime_t switchStart = std::max(currentTime, nextAvailableTime[node]);
-                        
+                    simtime_t fragmentOffset = senderStart;
+                    
+                    for (int fragIdx = 0; fragIdx < flow.fragmentCount; fragIdx++) {
+                        // Slot sender per questo frammento
                         schedule.push_back({
-                            .flowId = flow.id,
-                            .node = node,
-                            .offset = switchStart,
+                            .flowId = flow.id + "_frag" + std::to_string(fragIdx),
+                            .node = flow.src,
+                            .offset = fragmentOffset,
                             .duration = flow.txTime,
-                            .type = SLOT_SWITCH
+                            .type = SLOT_SENDER
                         });
                         
-                        nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
-                        currentTime = switchStart + flow.txTime;
+                        simtime_t currentTime = fragmentOffset + flow.txTime;
+                        
+                        // Schedule switch per questo frammento
+                        for (size_t j = 1; j < flow.path.size() - 1; j++) {
+                            std::string node = flow.path[j];
+                            
+                            if (node.find("switch") != std::string::npos) {
+                                currentTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
+                                simtime_t switchStart = std::max(currentTime, nextAvailableTime[node]);
+                                
+                                schedule.push_back({
+                                    .flowId = flow.id + "_frag" + std::to_string(fragIdx),
+                                    .node = node,
+                                    .offset = switchStart,
+                                    .duration = flow.txTime,
+                                    .type = SLOT_SWITCH
+                                });
+                                
+                                nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
+                                currentTime = switchStart + flow.txTime;
+                            }
+                        }
+                        
+                        // Aggiorna offset per prossimo frammento
+                        fragmentOffset = currentTime + tdma::getGuardTime();
+                        nextAvailableTime[flow.src] = fragmentOffset;
+                    }
+                    
+                } else {
+                    // UNICAST NORMALE (LiDAR)
+                    schedule.push_back({
+                        .flowId = flow.id,
+                        .node = flow.src,
+                        .offset = senderStart,
+                        .duration = flow.txTime,
+                        .type = SLOT_SENDER
+                    });
+                    
+                    nextAvailableTime[flow.src] = senderStart + flow.txTime + tdma::getGuardTime();
+                    
+                    simtime_t currentTime = senderStart + flow.txTime;
+                    
+                    for (size_t j = 1; j < flow.path.size() - 1; j++) {
+                        std::string node = flow.path[j];
+                        
+                        if (node.find("switch") != std::string::npos) {
+                            currentTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
+                            simtime_t switchStart = std::max(currentTime, nextAvailableTime[node]);
+                            
+                            schedule.push_back({
+                                .flowId = flow.id,
+                                .node = node,
+                                .offset = switchStart,
+                                .duration = flow.txTime,
+                                .type = SLOT_SWITCH
+                            });
+                            
+                            nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
+                            currentTime = switchStart + flow.txTime;
+                        }
                     }
                 }
             }
@@ -195,7 +277,6 @@ void TDMAScheduler::generateOptimizedSchedule() {
     }
 }
 
-
 simtime_t TDMAScheduler::findNextAvailableSlot(const std::string& node, simtime_t preferredTime, simtime_t duration) {
     simtime_t candidateTime = preferredTime;
     bool collision = true;
@@ -205,20 +286,17 @@ simtime_t TDMAScheduler::findNextAvailableSlot(const std::string& node, simtime_
     while (collision && attempt < maxAttempts) {
         collision = false;
         
-        // Verifica se c'è collisione con slot esistenti
         for (const auto& slot : schedule) {
             if (slot.node != node) continue;
             
             simtime_t slotEnd = slot.offset + slot.duration + tdma::getGuardTime();
             simtime_t candidateEnd = candidateTime + duration;
             
-            // Controlla sovrapposizione
             if ((candidateTime >= slot.offset && candidateTime < slotEnd) ||
                 (candidateEnd > slot.offset && candidateEnd <= slotEnd) ||
                 (candidateTime <= slot.offset && candidateEnd >= slotEnd)) {
                 
                 collision = true;
-                // Sposta dopo questo slot
                 candidateTime = slotEnd;
                 break;
             }
@@ -235,14 +313,12 @@ simtime_t TDMAScheduler::findNextAvailableSlot(const std::string& node, simtime_
 }
 
 bool TDMAScheduler::verifyNoCollisions() {
-    // Raggruppa slot per nodo
     std::map<std::string, std::vector<Slot>> nodeSlots;
     
     for (const auto& slot : schedule) {
         nodeSlots[slot.node].push_back(slot);
     }
     
-    // Verifica ogni nodo
     for (const auto& [node, slots] : nodeSlots) {
         auto sortedSlots = slots;
         std::sort(sortedSlots.begin(), sortedSlots.end(),
@@ -279,7 +355,15 @@ void TDMAScheduler::configureSenders() {
         bool first = true;
         
         for (const auto& slot : schedule) {
-            if (slot.flowId == flow.id && slot.type == SLOT_SENDER) {
+            // Per flussi frammentati, cerca tutti i frammenti
+            bool matchesFlow = false;
+            if (flow.isFragmented) {
+                matchesFlow = (slot.flowId.find(flow.id + "_frag") == 0);
+            } else {
+                matchesFlow = (slot.flowId == flow.id);
+            }
+            
+            if (matchesFlow && slot.type == SLOT_SENDER) {
                 if (!first) offsets << ",";
                 offsets << slot.offset.dbl();
                 first = false;
@@ -296,7 +380,9 @@ void TDMAScheduler::configureSenders() {
             sender->par("txDuration").setDoubleValue(flow.txTime.dbl());
             sender->par("flowId").setStringValue(flow.id);
             sender->par("srcAddr").setStringValue(flow.srcMac);
-            sender->par("payloadSize").setIntValue(flow.payload);
+            sender->par("payloadSize").setIntValue(
+                flow.isFragmented ? tdma::MTU_BYTES : flow.payload
+            );
             
             // Configura burst size e destinazione
             if (flow.dst.find(',') != std::string::npos) {
@@ -305,19 +391,21 @@ void TDMAScheduler::configureSenders() {
                 sender->par("burstSize").setIntValue(numDest);
                 sender->par("dstAddr").setStringValue("multicast");
             } else {
-                // Unicast
-                sender->par("burstSize").setIntValue(1);
+                // Unicast (normale o frammentato)
+                sender->par("burstSize").setIntValue(
+                    flow.isFragmented ? flow.fragmentCount : 1
+                );
                 sender->par("dstAddr").setStringValue(flow.dstMac);
             }
             
-            EV << "Configurato " << flow.src << " (" << flow.id << ")" << endl;
+            EV << "Configurato " << flow.src << " (" << flow.id << ")"
+               << " - slots=" << offsets.str().substr(0, 50) << "..." << endl;
             
         } catch (cRuntimeError& e) {
             error("Errore configurazione %s: %s", path.c_str(), e.what());
         }
     }
 }
-
 
 void TDMAScheduler::configureSwitches() {
     std::map<std::string, std::map<std::string, int>> switchTables;
@@ -331,6 +419,7 @@ void TDMAScheduler::configureSwitches() {
     switchTables["switch1"]["00:00:00:00:00:0B"] = 3; // ME via switch3
     switchTables["switch1"]["00:00:00:00:00:0D"] = 3; // S3 via switch3
     switchTables["switch1"]["00:00:00:00:00:11"] = 2; // S4 via switch2->switch4
+    switchTables["switch1"]["00:00:00:00:00:06"] = 5; // HU on port 5 (FLOW 4)
     
     // Switch2 MAC table
     switchTables["switch2"]["00:00:00:00:00:08"] = 1; // S2 on port 1
@@ -341,6 +430,7 @@ void TDMAScheduler::configureSwitches() {
     switchTables["switch2"]["00:00:00:00:00:0B"] = 0; // ME via switch1->switch3
     switchTables["switch2"]["00:00:00:00:00:0D"] = 0; // S3 via switch1->switch3
     switchTables["switch2"]["00:00:00:00:00:11"] = 4; // S4 via switch4
+    switchTables["switch2"]["00:00:00:00:00:06"] = 0; // HU via switch1 (FLOW 4)
     
     // Switch3 MAC table  
     switchTables["switch3"]["00:00:00:00:00:0B"] = 0; // ME on port 0
@@ -381,7 +471,6 @@ void TDMAScheduler::configureSwitches() {
     }
 }
 
-
 void TDMAScheduler::printScheduleDebug() {
     std::map<std::string, std::vector<Slot>> nodeSlots;
     
@@ -416,7 +505,6 @@ void TDMAScheduler::handleMessage(cMessage *msg) {
 }
 
 std::vector<std::string> TDMAScheduler::getPathTo(const std::string& src, const std::string& dst) {
-    // Mappa dei path hard-coded per questa topologia
     std::map<std::pair<std::string, std::string>, std::vector<std::string>> pathMap = {
         // Da ME agli speaker
         {{"ME", "S1"}, {"ME", "switch3", "switch1", "S1"}},
