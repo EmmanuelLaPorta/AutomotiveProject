@@ -16,6 +16,7 @@ protected:
     int payloadSize;
     int burstSize;
     simtime_t txDuration;
+    bool isFragmented;
     
     std::vector<simtime_t> txSlots;
     int currentSlot;
@@ -25,6 +26,7 @@ protected:
     virtual void handleMessage(cMessage *msg) override;
     virtual void finish() override;
     
+
 private:
     void transmitBurst();
     void scheduleNextSlot();

@@ -13,6 +13,8 @@ void TDMASenderApp::initialize() {
     payloadSize = par("payloadSize");
     burstSize = par("burstSize");
     
+    isFragmented = (burstSize > 1) && (payloadSize == 1500);
+
     // Parse TDMA slots
     std::string slotsStr = par("tdmaSlots").stringValue();
     if (!slotsStr.empty()) {
@@ -117,6 +119,8 @@ void TDMASenderApp::transmitBurst() {
         }
     }
     
+
+
     EV_DEBUG << flowId << " transmitted burst at slot " << currentSlot 
              << " (t=" << simTime() << ")" << endl;
 }

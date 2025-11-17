@@ -5,7 +5,7 @@
         <input pattern="results/General.sca"/>
     </inputs>
     <charts>
-        <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="944828422" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
+        <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="355212792" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
             <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -746,7 +746,7 @@ utils.export_data_if_needed(df, props)
             <property name="yaxis_max" value=""/>
             <property name="Plot.Antialias" value="true"/>
         </chart>
-        <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1919399682" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
+        <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1896337022" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
             <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -1480,14 +1480,14 @@ utils.export_data_if_needed(df, props)
             <property name="linewidth" value="1.5"/>
             <property name="legend_format" value=""/>
             <property name="xaxis_unit" value=""/>
-            <property name="filter" value="(module =~ &quot;*.CU.*&quot; AND name =~ &quot;maxTxQueueSize&quot;) OR (module =~ &quot;*.switch[12]*&quot; AND name =~ &quot;port*_maxQueue&quot;)"/>
+            <property name="filter" value="module =~ &quot;*.HU.receiverApp[0]&quot; AND name =~ &quot;jitter:vector&quot;"/>
             <property name="X.Label.Wrap" value="true"/>
             <property name="secondary_ordering_regex_list" value=""/>
             <property name="simplify" value="false"/>
             <property name="yaxis_max" value=""/>
             <property name="Plot.Antialias" value="true"/>
         </chart>
-        <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/barchart.png" id="951061960" name="TX Max Queue" resultTypes="scalar" template="barchart_native" type="BAR">
+        <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/barchart.png" id="302629676" name="TX Max Queue" resultTypes="scalar" template="barchart_native" type="BAR">
             <script><![CDATA[from omnetpp.scave import results, chart, utils
 
 # get chart properties
@@ -2139,7 +2139,7 @@ utils.export_data_if_needed(df, props)
             <property name="baseline" value="0"/>
             <property name="image_export_filename" value=""/>
             <property name="legend_format" value=""/>
-            <property name="filter" value="(module =~ &quot;*.ME.*&quot; OR module =~ &quot;*.switch*&quot;) AND name =~ &quot;*Queue*&quot;"/>
+            <property name="filter" value="(module =~ &quot;*.CU.mac&quot; AND name =~ &quot;maxTxQueueSize&quot;) OR ((module =~ &quot;*.switch1&quot; OR module =~ &quot;*.switch2&quot;) AND name =~ &quot;port*_maxQueue&quot;)"/>
             <property name="X.Label.Wrap" value="true"/>
             <property name="secondary_ordering_regex_list" value=""/>
             <property name="series" value=""/>

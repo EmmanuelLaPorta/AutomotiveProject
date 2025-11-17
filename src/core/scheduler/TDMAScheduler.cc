@@ -187,34 +187,43 @@ void TDMAScheduler::generateOptimizedSchedule() {
             } else {
                 // UNICAST (con possibile frammentazione)
                 if (flow.isFragmented) {
-                    // Gestione flusso frammentato
+                    // Per flussi frammentati, alloca UN SOLO slot ma di durata = burst completo
+                    simtime_t burstDuration = flow.txTime * flow.fragmentCount +
+                                              tdma::getIfgTime() * (flow.fragmentCount - 1);
+
                     EV_DEBUG << "Scheduling fragmented flow " << flow.id 
-                             << " with " << flow.fragmentCount << " fragments" << endl;
+                             << " with " << flow.fragmentCount << " fragments, "
+                             << "burst duration=" << burstDuration << endl;
+
+                    // Slot sender per l'intero burst
+                    schedule.push_back({
+                        .flowId = flow.id,
+                        .node = flow.src,
+                        .offset = senderStart,
+                        .duration = burstDuration,
+                        .type = SLOT_SENDER
+                    });
+
+                    nextAvailableTime[flow.src] = senderStart + burstDuration + tdma::getGuardTime();
                     
-                    simtime_t fragmentOffset = senderStart;
+                    // Gli switch processano i frammenti in sequenza
+                    simtime_t currentTime = senderStart;
                     
                     for (int fragIdx = 0; fragIdx < flow.fragmentCount; fragIdx++) {
-                        // Slot sender per questo frammento
-                        schedule.push_back({
-                            .flowId = flow.id + "_frag" + std::to_string(fragIdx),
-                            .node = flow.src,
-                            .offset = fragmentOffset,
-                            .duration = flow.txTime,
-                            .type = SLOT_SENDER
-                        });
+                        currentTime += flow.txTime;
+                        if (fragIdx > 0) currentTime += tdma::getIfgTime();
                         
-                        simtime_t currentTime = fragmentOffset + flow.txTime;
+                        simtime_t switchTime = currentTime;
                         
-                        // Schedule switch per questo frammento
                         for (size_t j = 1; j < flow.path.size() - 1; j++) {
                             std::string node = flow.path[j];
                             
                             if (node.find("switch") != std::string::npos) {
-                                currentTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
-                                simtime_t switchStart = std::max(currentTime, nextAvailableTime[node]);
+                                switchTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
+                                simtime_t switchStart = std::max(switchTime, nextAvailableTime[node]);
                                 
                                 schedule.push_back({
-                                    .flowId = flow.id + "_frag" + std::to_string(fragIdx),
+                                    .flowId = flow.id,
                                     .node = node,
                                     .offset = switchStart,
                                     .duration = flow.txTime,
@@ -222,13 +231,9 @@ void TDMAScheduler::generateOptimizedSchedule() {
                                 });
                                 
                                 nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
-                                currentTime = switchStart + flow.txTime;
+                                switchTime = switchStart + flow.txTime;
                             }
                         }
-                        
-                        // Aggiorna offset per prossimo frammento
-                        fragmentOffset = currentTime + tdma::getGuardTime();
-                        nextAvailableTime[flow.src] = fragmentOffset;
                     }
                     
                 } else {
@@ -340,7 +345,7 @@ bool TDMAScheduler::verifyNoCollisions() {
 
 void TDMAScheduler::configureSenders() {
     EV << "=== Configurazione Senders ===" << endl;
-    
+
     for (const auto& flow : flows) {
         std::string path = flow.src + ".senderApp[0]";
         cModule* sender = getModuleByPath(path.c_str());
@@ -349,27 +354,31 @@ void TDMAScheduler::configureSenders() {
             EV_WARN << "Modulo " << path << " non trovato!" << endl;
             continue;
         }
-        
+
         // Raccogli slot per questo sender
         std::stringstream offsets;
         bool first = true;
-        
+        int slotCount = 0;
+
         for (const auto& slot : schedule) {
-            // Per flussi frammentati, cerca tutti i frammenti
+            // Controlla se questo slot appartiene al flusso corrente
             bool matchesFlow = false;
+
             if (flow.isFragmented) {
-                matchesFlow = (slot.flowId.find(flow.id + "_frag") == 0);
+                // Per flussi frammentati, cerca slot con flowId esatto
+                matchesFlow = (slot.flowId == flow.id) && (slot.node == flow.src);
             } else {
-                matchesFlow = (slot.flowId == flow.id);
+                matchesFlow = (slot.flowId == flow.id) && (slot.node == flow.src);
             }
             
             if (matchesFlow && slot.type == SLOT_SENDER) {
                 if (!first) offsets << ",";
                 offsets << slot.offset.dbl();
                 first = false;
+                slotCount++;
             }
         }
-        
+
         if (first) {
             EV_WARN << "Nessuno slot trovato per " << flow.id << endl;
             continue;
@@ -398,8 +407,13 @@ void TDMAScheduler::configureSenders() {
                 sender->par("dstAddr").setStringValue(flow.dstMac);
             }
             
-            EV << "Configurato " << flow.src << " (" << flow.id << ")"
-               << " - slots=" << offsets.str().substr(0, 50) << "..." << endl;
+            // Log conciso
+            std::string slotsPreview = offsets.str().substr(0, 50);
+            if (offsets.str().length() > 50) slotsPreview += "...";
+
+            EV << "Configurato " << flow.src << " (" << flow.id << "): "
+               << slotCount << " slot, burst=" << (flow.isFragmented ? flow.fragmentCount : 1)
+               << (flow.isFragmented ? " (frammentato)" : "") << endl;
             
         } catch (cRuntimeError& e) {
             error("Errore configurazione %s: %s", path.c_str(), e.what());
