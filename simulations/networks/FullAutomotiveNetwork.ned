@@ -24,22 +24,22 @@ network FullAutomotiveNetwork {
 
         // ===== 4 SWITCH =====
         switch1: TDMASwitch {
-            numPorts = 5;
+            numPorts = 7;
             @display("p=300,300;i=device/switch");
         }
 
         switch2: TDMASwitch {
-            numPorts = 5;  // 5 porte usate: switch1, S2, LD2, CU, switch4
+            numPorts = 6;
             @display("p=700,300;i=device/switch");
         }
 
         switch3: TDMASwitch {
-            numPorts = 4;  // 4 porte usate: ME, switch1, S3, switch4
+            numPorts = 5;
             @display("p=300,500;i=device/switch");
         }
 
         switch4: TDMASwitch {
-            numPorts = 3;  // 3 porte usate: switch2, switch3, S4
+            numPorts = 4;
             @display("p=700,500;i=device/switch");
         }
 
@@ -107,29 +107,65 @@ network FullAutomotiveNetwork {
             @display("p=800,600");
         }
 
+        US1: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:02";
+            @display("p=150,200");
+        }
+
+        US2: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:09";
+            @display("p=900,200");
+        }
+
+        US3: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:10";
+            @display("p=800,700");
+        }
+
+        US4: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:0C";
+            @display("p=150,700");
+        }
+
+        CM1: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:04";
+            @display("p=100,150");
+        }
+
     connections:
-        // === SWITCH 1 (4 porte) ===
+        // === SWITCH 1 ===
         S1.ethg <--> GigabitEthernet <--> switch1.port[0];
         LD1.ethg <--> GigabitEthernet <--> switch1.port[1];
         switch1.port[2] <--> GigabitEthernet <--> switch2.port[0];
         switch1.port[3] <--> GigabitEthernet <--> switch3.port[1];
 		HU.ethg <--> GigabitEthernet <--> switch1.port[4];
+		US1.ethg <--> GigabitEthernet <--> switch1.port[5];
+		CM1.ethg <--> GigabitEthernet <--> switch1.port[6];
 
-        // === SWITCH 2 (5 porte) ===
-        // port[0] già connessa a switch1
+        // === SWITCH 2 ===
         S2.ethg <--> GigabitEthernet <--> switch2.port[1];
         LD2.ethg <--> GigabitEthernet <--> switch2.port[2];
         CU.ethg <--> GigabitEthernet <--> switch2.port[3];
         switch2.port[4] <--> GigabitEthernet <--> switch4.port[0];
+        US2.ethg <--> GigabitEthernet <--> switch2.port[5];
 
         // === SWITCH 3 (4 porte) ===
         ME.ethg <--> GigabitEthernet <--> switch3.port[0];
-        // port[1] già connessa a switch1
         S3.ethg <--> GigabitEthernet <--> switch3.port[2];
         switch3.port[3] <--> GigabitEthernet <--> switch4.port[1];
+        US4.ethg <--> GigabitEthernet <--> switch3.port[4];
 
-        // === SWITCH 4 (3 porte) ===
-        // port[0] già connessa a switch2
-        // port[1] già connessa a switch3
+        // === SWITCH 4 ===
         S4.ethg <--> GigabitEthernet <--> switch4.port[2];
+        US3.ethg <--> GigabitEthernet <--> switch4.port[3];
 }

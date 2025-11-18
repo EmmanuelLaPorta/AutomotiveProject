@@ -27,7 +27,7 @@ void TDMAScheduler::initialize() {
 }
 
 void TDMAScheduler::defineFlows() {
-    // Flow 1: LiDAR → CU (ADAS)
+    // Flow 1a: LD1 → CU (ADAS)
     flows.push_back({
         .id = "flow1_LD1",
         .src = "LD1",
@@ -43,6 +43,7 @@ void TDMAScheduler::defineFlows() {
         .fragmentCount = 1
     });
     
+    //Flow 1b: LD2 → CU (ADAS)
     flows.push_back({
         .id = "flow1_LD2",
         .src = "LD2", 
@@ -74,6 +75,72 @@ void TDMAScheduler::defineFlows() {
         .fragmentCount = 1
     });
     
+
+    // Flow 3a: US1 → CU (Parking sensor)
+    flows.push_back({
+        .id = "flow3_US1",
+        .src = "US1",
+        .dst = "CU",
+        .srcMac = "00:00:00:00:00:02",
+        .dstMac = "00:00:00:00:00:07",
+        .period = SimTime(100, SIMTIME_MS),
+        .payload = 188,
+        .priority = tdma::PRIO_BEST_EFFORT,
+        .path = {"US1", "switch1", "switch2", "CU"},
+        .txTime = SimTime(0),
+        .isFragmented = false,
+        .fragmentCount = 1
+    });
+
+    // Flow 3b: US2 → CU
+    flows.push_back({
+        .id = "flow3_US2",
+        .src = "US2",
+        .dst = "CU",
+        .srcMac = "00:00:00:00:00:09",
+        .dstMac = "00:00:00:00:00:07",
+        .period = SimTime(100, SIMTIME_MS),
+        .payload = 188,
+        .priority = tdma::PRIO_BEST_EFFORT,
+        .path = {"US2", "switch2", "CU"},
+        .txTime = SimTime(0),
+        .isFragmented = false,
+        .fragmentCount = 1
+    });
+
+    // Flow 3c: US3 → CU
+    flows.push_back({
+        .id = "flow3_US3",
+        .src = "US3",
+        .dst = "CU",
+        .srcMac = "00:00:00:00:00:10",
+        .dstMac = "00:00:00:00:00:07",
+        .period = SimTime(100, SIMTIME_MS),
+        .payload = 188,
+        .priority = tdma::PRIO_BEST_EFFORT,
+        .path = {"US3", "switch4", "switch2", "CU"},
+        .txTime = SimTime(0),
+        .isFragmented = false,
+        .fragmentCount = 1
+    });
+
+    // Flow 3d: US4 → CU
+    flows.push_back({
+        .id = "flow3_US4",
+        .src = "US4",
+        .dst = "CU",
+        .srcMac = "00:00:00:00:00:0C",
+        .dstMac = "00:00:00:00:00:07",
+        .period = SimTime(100, SIMTIME_MS),
+        .payload = 188,
+        .priority = tdma::PRIO_BEST_EFFORT,
+        .path = {"US4", "switch3", "switch1", "switch2", "CU"},
+        .txTime = SimTime(0),
+        .isFragmented = false,
+        .fragmentCount = 1
+    });
+
+
     // Flow 4: CU → HU (CONTROL DATA - FRAGMENTED)
     flows.push_back({
         .id = "flow4",
@@ -88,6 +155,22 @@ void TDMAScheduler::defineFlows() {
         .txTime = SimTime(0),
         .isFragmented = true,
         .fragmentCount = 7  // 10500 / 1500 = 7 frammenti
+    });
+
+    // Flow 5: CM1 ? HU (Front Camera RAW 60 FPS - FRAGMENTED)
+    flows.push_back({
+        .id = "flow5",
+        .src = "CM1",
+        .dst = "HU",
+        .srcMac = "00:00:00:00:00:04",
+        .dstMac = "00:00:00:00:00:06",
+        .period = SimTime(16.66, SIMTIME_MS),
+        .payload = 178500,
+        .priority = tdma::PRIO_CRITICAL_SAFETY,
+        .path = {"CM1", "switch1", "HU"},
+        .txTime = SimTime(0),
+        .isFragmented = true,
+        .fragmentCount = 119  // 178500 / 1500 = 119 frammenti
     });
 }
 
@@ -434,6 +517,11 @@ void TDMAScheduler::configureSwitches() {
     switchTables["switch1"]["00:00:00:00:00:0D"] = 3; // S3
     switchTables["switch1"]["00:00:00:00:00:11"] = 2; // S4
     switchTables["switch1"]["00:00:00:00:00:06"] = 4; // HU
+    switchTables["switch1"]["00:00:00:00:00:02"] = 5; // US1
+    switchTables["switch1"]["00:00:00:00:00:09"] = 2; // US2
+    switchTables["switch1"]["00:00:00:00:00:10"] = 2; // US3
+    switchTables["switch1"]["00:00:00:00:00:0C"] = 3; // US4
+    switchTables["switch1"]["00:00:00:00:00:04"] = 6; // CM1
     
     // Switch2 MAC table
     switchTables["switch2"]["00:00:00:00:00:08"] = 1; // S2
@@ -445,6 +533,11 @@ void TDMAScheduler::configureSwitches() {
     switchTables["switch2"]["00:00:00:00:00:0D"] = 0; // S3
     switchTables["switch2"]["00:00:00:00:00:11"] = 4; // S4
     switchTables["switch2"]["00:00:00:00:00:06"] = 0; // HU
+    switchTables["switch2"]["00:00:00:00:00:02"] = 0; // US1
+    switchTables["switch2"]["00:00:00:00:00:09"] = 5; // US2
+    switchTables["switch2"]["00:00:00:00:00:10"] = 4; // US3
+    switchTables["switch2"]["00:00:00:00:00:0C"] = 0; // US4
+    switchTables["switch2"]["00:00:00:00:00:04"] = 0; // CM1
     
     // Switch3 MAC table  
     switchTables["switch3"]["00:00:00:00:00:0B"] = 0; // ME
@@ -455,6 +548,11 @@ void TDMAScheduler::configureSwitches() {
     switchTables["switch3"]["00:00:00:00:00:03"] = 1; // LD1
     switchTables["switch3"]["00:00:00:00:00:0A"] = 1; // LD2
     switchTables["switch3"]["00:00:00:00:00:07"] = 1; // CU
+    switchTables["switch3"]["00:00:00:00:00:02"] = 1; // US1
+    switchTables["switch3"]["00:00:00:00:00:09"] = 1; // US2
+    switchTables["switch3"]["00:00:00:00:00:10"] = 3; // US3
+    switchTables["switch3"]["00:00:00:00:00:0C"] = 4; // US4
+    switchTables["switch3"]["00:00:00:00:00:04"] = 1; // CM1
     
     // Switch4 MAC table
     switchTables["switch4"]["00:00:00:00:00:11"] = 2; // S4
@@ -465,6 +563,11 @@ void TDMAScheduler::configureSwitches() {
     switchTables["switch4"]["00:00:00:00:00:03"] = 0; // LD1
     switchTables["switch4"]["00:00:00:00:00:0A"] = 0; // LD2
     switchTables["switch4"]["00:00:00:00:00:07"] = 0; // CU
+    switchTables["switch4"]["00:00:00:00:00:02"] = 0; // US1
+    switchTables["switch4"]["00:00:00:00:00:09"] = 0; // US2
+    switchTables["switch4"]["00:00:00:00:00:10"] = 3; // US3
+    switchTables["switch4"]["00:00:00:00:00:0C"] = 1; // US4
+    switchTables["switch4"]["00:00:00:00:00:04"] = 0; // CM1
     
     // Applica configurazione
     for (const auto& [switchName, macTable] : switchTables) {
