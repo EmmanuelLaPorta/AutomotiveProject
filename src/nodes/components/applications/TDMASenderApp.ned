@@ -9,6 +9,7 @@ simple TDMASenderApp {
         string dstAddr = default("") @mutable;
         int payloadSize @unit(B) = default(1500B) @mutable;
         int burstSize = default(1) @mutable;
+        int numDestinations = default(1) @mutable;
         string tdmaSlots = default("") @mutable;
         double txDuration @unit(s) = default(0s) @mutable;
 

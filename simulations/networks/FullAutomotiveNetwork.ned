@@ -24,7 +24,7 @@ network FullAutomotiveNetwork {
 
         // ===== 4 SWITCH =====
         switch1: TDMASwitch {
-            numPorts = 7;
+            numPorts = 8;
             @display("p=300,300;i=device/switch");
         }
 
@@ -34,12 +34,12 @@ network FullAutomotiveNetwork {
         }
 
         switch3: TDMASwitch {
-            numPorts = 5;
+            numPorts = 6;
             @display("p=300,500;i=device/switch");
         }
 
         switch4: TDMASwitch {
-            numPorts = 4;
+            numPorts = 6;
             @display("p=700,500;i=device/switch");
         }
 
@@ -73,7 +73,7 @@ network FullAutomotiveNetwork {
 		}
 
         ME: EndSystem {
-            numSenders = 1;
+            numSenders = 2;
             numReceivers = 0;
             macAddress = "00:00:00:00:00:0B";
             @display("p=200,600");
@@ -142,6 +142,34 @@ network FullAutomotiveNetwork {
             @display("p=100,150");
         }
 
+        TLM: EndSystem {
+            numSenders = 2;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:01";
+            @display("p=100,250");
+        }
+
+        RS1: EndSystem {
+            numSenders = 0;
+            numReceivers = 1;
+            macAddress = "00:00:00:00:00:12";
+            @display("p=900,600");
+        }
+
+        RS2: EndSystem {
+            numSenders = 0;
+            numReceivers = 1;
+            macAddress = "00:00:00:00:00:0E";
+            @display("p=200,600");
+        }
+
+        RC: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:0F";
+            @display("p=800,700");
+        }
+
     connections:
         // === SWITCH 1 ===
         S1.ethg <--> GigabitEthernet <--> switch1.port[0];
@@ -151,6 +179,7 @@ network FullAutomotiveNetwork {
 		HU.ethg <--> GigabitEthernet <--> switch1.port[4];
 		US1.ethg <--> GigabitEthernet <--> switch1.port[5];
 		CM1.ethg <--> GigabitEthernet <--> switch1.port[6];
+		TLM.ethg <--> GigabitEthernet <--> switch1.port[7];
 
         // === SWITCH 2 ===
         S2.ethg <--> GigabitEthernet <--> switch2.port[1];
@@ -164,8 +193,11 @@ network FullAutomotiveNetwork {
         S3.ethg <--> GigabitEthernet <--> switch3.port[2];
         switch3.port[3] <--> GigabitEthernet <--> switch4.port[1];
         US4.ethg <--> GigabitEthernet <--> switch3.port[4];
+        RS2.ethg <--> GigabitEthernet <--> switch3.port[5];
 
         // === SWITCH 4 ===
         S4.ethg <--> GigabitEthernet <--> switch4.port[2];
         US3.ethg <--> GigabitEthernet <--> switch4.port[3];
+        RC.ethg <--> GigabitEthernet <--> switch4.port[4];
+		RS1.ethg <--> GigabitEthernet <--> switch4.port[5];
 }

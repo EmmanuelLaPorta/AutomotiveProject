@@ -25,13 +25,12 @@ void TDMAMac::initialize() {
 void TDMAMac::handleMessage(cMessage *msg) {
     if (msg->isSelfMessage()) {
         handleSelfMessage(msg);
-    } else if (msg->getArrivalGate() == gate("upperIn")) {
+    } else if (msg->getArrivalGate()->isName("upperIn")) {  // Cambiato da == gate("upperIn")
         handleUpperMessage(check_and_cast<cPacket*>(msg));
     } else {
         handleLowerMessage(check_and_cast<cPacket*>(msg));
     }
 }
-
 void TDMAMac::handleSelfMessage(cMessage *msg) {
     if (strcmp(msg->getName(), "TxComplete") == 0) {
         delete msg;

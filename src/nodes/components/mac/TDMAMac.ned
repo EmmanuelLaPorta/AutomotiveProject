@@ -14,7 +14,7 @@ simple TDMAMac {
         @statistic[rxQueueLength](record=vector,stats,max);
 
     gates:
-        input upperIn;
+        input upperIn[];
         output upperOut;
         input lowerIn;
         output lowerOut;

@@ -15,6 +15,7 @@ protected:
     std::string dstAddr;
     int payloadSize;
     int burstSize;
+    int numDestinations;
     simtime_t txDuration;
     bool isFragmented;
     

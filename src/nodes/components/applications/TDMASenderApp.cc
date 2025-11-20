@@ -12,6 +12,7 @@ void TDMASenderApp::initialize() {
     dstAddr = par("dstAddr").stringValue();
     payloadSize = par("payloadSize");
     burstSize = par("burstSize");
+    numDestinations = par("numDestinations");
     
     isFragmented = (burstSize > 1) && (payloadSize == 1500);
 
@@ -31,7 +32,8 @@ void TDMASenderApp::initialize() {
     packetsSent = 0;
     
     EV << "=== TDMASenderApp " << flowId << " initialized ===" << endl;
-    EV << "Slots: " << txSlots.size() << ", Burst size: " << burstSize << endl;
+      EV << "Slots: " << txSlots.size() << ", Burst size: " << burstSize
+         << ", Destinations: " << numDestinations << endl;
     
     // Schedula primo slot
     if (!txSlots.empty()) {
@@ -55,7 +57,7 @@ void TDMASenderApp::handleMessage(cMessage *msg) {
 }
 
 void TDMASenderApp::transmitBurst() {
-     // Se destinazione multicast, crea frame per ogni speaker
+    // Flow 2: Audio multicast (ME -> 4 speaker)
     if (dstAddr == "multicast" && flowId.find("flow2") != std::string::npos) {
         std::vector<std::string> speakers = {
             "00:00:00:00:00:05",  // S1
@@ -63,8 +65,6 @@ void TDMASenderApp::transmitBurst() {
             "00:00:00:00:00:0D",  // S3
             "00:00:00:00:00:11"   // S4
         };
-        
-        EV << "ME trasmissione multicast a " << speakers.size() << " speaker" << endl; // DEBUG
         
         for (size_t i = 0; i < speakers.size(); i++) {
             TDMAFrame *frame = new TDMAFrame(flowId.c_str());
@@ -80,9 +80,6 @@ void TDMASenderApp::transmitBurst() {
             frame->setLastFragment(i == speakers.size() - 1);
             frame->setByteLength(payloadSize);
             
-            EV << "  Frame " << i << " verso " << speakers[i] << endl; // DEBUG
-            
-            // Invia con piccolo delay tra frame
             if (i > 0) {
                 simtime_t fragmentDelay = i * (txDuration + tdma::getIfgTime());
                 sendDelayed(frame, fragmentDelay, "out");
@@ -92,8 +89,49 @@ void TDMASenderApp::transmitBurst() {
             
             packetsSent++;
         }
-    } else {
-        // Trasmissione normale (codice esistente)
+    }
+    // Flow 6: Video streaming multicast frammentato (ME -> RS1, RS2)
+    else if (dstAddr == "multicast" && flowId.find("flow6") != std::string::npos) {
+        std::vector<std::string> screens = {
+            "00:00:00:00:00:12",  // RS1
+            "00:00:00:00:00:0E"   // RS2
+        };
+
+        // Determina quale destinazione inviare in questo slot
+        // Slot pari (0,2,4...) -> RS1, Slot dispari (1,3,5...) -> RS2
+        int destIdx = currentSlot % numDestinations;
+        std::string dstMac = screens[destIdx];
+
+        EV << "Flow6 slot " << currentSlot << ": invio " << burstSize
+           << " frammenti a " << (destIdx == 0 ? "RS1" : "RS2") << endl;
+
+        // Invia solo i frammenti per UNA destinazione
+        for (int fragIdx = 0; fragIdx < burstSize; fragIdx++) {
+            TDMAFrame *frame = new TDMAFrame(flowId.c_str());
+
+            frame->setSrcAddr(srcAddr.c_str());
+            frame->setDstAddr(dstMac.c_str());
+            frame->setFlowId(flowId.c_str());
+            frame->setSlotNumber(currentSlot);
+            frame->setFragmentNumber(fragIdx);
+            frame->setTotalFragments(burstSize);
+            frame->setGenTime(simTime());
+            frame->setTxTime(txDuration);
+            frame->setLastFragment(fragIdx == burstSize - 1);
+            frame->setByteLength(payloadSize);
+
+            if (fragIdx > 0) {
+                simtime_t delay = fragIdx * (txDuration + tdma::getIfgTime());
+                sendDelayed(frame, delay, "out");
+            } else {
+                send(frame, "out");
+            }
+
+            packetsSent++;
+        }
+    }
+    // Trasmissione normale (unicast con o senza frammentazione)
+    else {
         for (int i = 0; i < burstSize; i++) {
             TDMAFrame *frame = new TDMAFrame(flowId.c_str());
             
@@ -118,8 +156,6 @@ void TDMASenderApp::transmitBurst() {
             packetsSent++;
         }
     }
-    
-
 
     EV_DEBUG << flowId << " transmitted burst at slot " << currentSlot 
              << " (t=" << simTime() << ")" << endl;
