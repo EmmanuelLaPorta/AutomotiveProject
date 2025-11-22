@@ -5,9 +5,9 @@
         <input pattern="results/General.sca"/>
     </inputs>
     <charts>
-        <folder id="180884666" name="E2E Delay e Jitter per flow">
-            <folder id="2075150468" name="Flusso 1 (LD1-2 -&gt; CU) ">
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="216138151" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
+        <folder id="545936445" name="E2E Delay e Jitter per flow">
+            <folder id="796466408" name="Flusso 1 (LD1-2 -&gt; CU) ">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1570417948" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -748,7 +748,7 @@ utils.export_data_if_needed(df, props)
                     <property name="yaxis_max" value=""/>
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="304232243" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1580784793" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -1490,8 +1490,8 @@ utils.export_data_if_needed(df, props)
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
             </folder>
-            <folder id="1901883072" name="Flusso 2 (ME -&gt; S1-4)">
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1611851639" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
+            <folder id="2022082358" name="Flusso 2 (ME -&gt; S1-4)">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1769331725" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -2232,7 +2232,7 @@ utils.export_data_if_needed(df, props)
                     <property name="yaxis_max" value=""/>
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1404168538" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1370701083" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -2974,8 +2974,8 @@ utils.export_data_if_needed(df, props)
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
             </folder>
-            <folder id="1730618645" name="Flusso 3 (US1-4 -&gt; CU)">
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1864258033" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
+            <folder id="664546953" name="Flusso 3 (US1-4 -&gt; CU)">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="940988882" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -3716,7 +3716,7 @@ utils.export_data_if_needed(df, props)
                     <property name="yaxis_max" value=""/>
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1647563537" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="2126760988" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -4458,8 +4458,8 @@ utils.export_data_if_needed(df, props)
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
             </folder>
-            <folder id="1138638150" name="Flusso 4 (CU -&gt; HU)">
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1423120815" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
+            <folder id="1733332833" name="Flusso 4 (CU -&gt; HU)">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="339814425" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -5200,7 +5200,7 @@ utils.export_data_if_needed(df, props)
                     <property name="yaxis_max" value=""/>
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1063056024" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1409050193" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -5942,8 +5942,8 @@ utils.export_data_if_needed(df, props)
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
             </folder>
-            <folder id="1071626488" name="Flusso 5 (CM1 -&gt; HU)">
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1600417808" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
+            <folder id="1293523185" name="Flusso 5 (CM1 -&gt; HU)">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="77409488" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -6684,7 +6684,7 @@ utils.export_data_if_needed(df, props)
                     <property name="yaxis_max" value=""/>
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1301968228" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="2055644193" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -7426,8 +7426,8 @@ utils.export_data_if_needed(df, props)
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
             </folder>
-            <folder id="400688038" name="Flusso 6 (ME -&gt; RS1-2)">
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="767668864" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
+            <folder id="1651797322" name="Flusso 6 (ME -&gt; RS1-2)">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="325925734" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -8168,7 +8168,7 @@ utils.export_data_if_needed(df, props)
                     <property name="yaxis_max" value=""/>
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="468507855" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1080011381" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -8910,8 +8910,8 @@ utils.export_data_if_needed(df, props)
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
             </folder>
-            <folder id="265346519" name="Flusso 7 (TLM -&gt; HU,CU)">
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="2087271511" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
+            <folder id="1958741034" name="Flusso 7 (TLM -&gt; HU,CU)">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="813748696" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -9652,7 +9652,7 @@ utils.export_data_if_needed(df, props)
                     <property name="yaxis_max" value=""/>
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="965879290" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="2074003104" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -10394,8 +10394,8 @@ utils.export_data_if_needed(df, props)
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
             </folder>
-            <folder id="1696833856" name="Flusso 8 (RC -&gt; HU)">
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="188675962" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
+            <folder id="1616678408" name="Flusso 8 (RC -&gt; HU)">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="134760389" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -11136,7 +11136,7 @@ utils.export_data_if_needed(df, props)
                     <property name="yaxis_max" value=""/>
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="347400568" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="62809841" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -11879,9 +11879,9 @@ utils.export_data_if_needed(df, props)
                 </chart>
             </folder>
         </folder>
-        <folder id="551211016" name="E2E Delay e Jitter per receiver nodes">
-            <folder id="1971907425" name="CU">
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="994655147" name="E2E Delay totale" resultTypes="vector" template="linechart_native" type="LINE">
+        <folder id="1337360373" name="E2E Delay e Jitter per receiver nodes">
+            <folder id="1174059154" name="CU">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1734934409" name="E2E Delay totale" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -12622,7 +12622,7 @@ utils.export_data_if_needed(df, props)
                     <property name="yaxis_max" value=""/>
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1030789171" name="Jitter totale" resultTypes="vector" template="linechart_native" type="LINE">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="2059304918" name="Jitter totale" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -13364,8 +13364,8 @@ utils.export_data_if_needed(df, props)
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
             </folder>
-            <folder id="767347854" name="HU">
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1576535925" name="E2E Delay totale" resultTypes="vector" template="linechart_native" type="LINE">
+            <folder id="1880902521" name="HU">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1251514665" name="E2E Delay totale" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -14106,7 +14106,7 @@ utils.export_data_if_needed(df, props)
                     <property name="yaxis_max" value=""/>
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1474214790" name="Jitter totale" resultTypes="vector" template="linechart_native" type="LINE">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1452488104" name="Jitter totale" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -14848,8 +14848,8 @@ utils.export_data_if_needed(df, props)
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
             </folder>
-            <folder id="232909026" name="S1-4">
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1983579673" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
+            <folder id="817124774" name="S1-4">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="205854500" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -15590,7 +15590,7 @@ utils.export_data_if_needed(df, props)
                     <property name="yaxis_max" value=""/>
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="2049575971" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1717733847" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -16332,8 +16332,8 @@ utils.export_data_if_needed(df, props)
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
             </folder>
-            <folder id="52098660" name="RS1-2">
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="821722372" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
+            <folder id="1727006253" name="RS1-2">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="1203893262" name="E2E Delay" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -17074,7 +17074,7 @@ utils.export_data_if_needed(df, props)
                     <property name="yaxis_max" value=""/>
                     <property name="Plot.Antialias" value="true"/>
                 </chart>
-                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="465301996" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
+                <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/linechart.png" id="842239649" name="Jitter" resultTypes="vector" template="linechart_native" type="LINE">
                     <script><![CDATA[import math
 from omnetpp.scave import results, chart, utils
 
@@ -17817,8 +17817,8 @@ utils.export_data_if_needed(df, props)
                 </chart>
             </folder>
         </folder>
-        <folder id="253486782" name="Numero max frame in coda">
-            <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/barchart.png" id="1922326005" name="Max Queue per tutti i sender nodes" resultTypes="scalar" template="barchart_native" type="BAR">
+        <folder id="1440667801" name="Numero max frame in coda">
+            <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/barchart.png" id="1311785173" name="Max Queue per tutti i sender nodes" resultTypes="scalar" template="barchart_native" type="BAR">
                 <script><![CDATA[from omnetpp.scave import results, chart, utils
 
 # get chart properties
@@ -18470,7 +18470,7 @@ utils.export_data_if_needed(df, props)
                 <property name="baseline" value="0"/>
                 <property name="image_export_filename" value=""/>
                 <property name="legend_format" value=""/>
-                <property name="filter" value="module =~ &quot;*.*.mac&quot; AND name =~ &quot;maxTxQueueSize&quot;"/>
+                <property name="filter" value="(module =~ &quot;*.LD1.mac&quot; OR module =~ &quot;*.LD2.mac&quot; OR module =~ &quot;*.CU.mac&quot; OR &#10; module =~ &quot;*.ME.mac&quot; OR module =~ &quot;*.US*.mac&quot; OR module =~ &quot;*.CM1.mac&quot; OR &#10; module =~ &quot;*.TLM.mac&quot; OR module =~ &quot;*.RC.mac&quot;) &#10;AND name =~ &quot;maxTxQueueSize&quot;"/>
                 <property name="X.Label.Wrap" value="true"/>
                 <property name="secondary_ordering_regex_list" value=""/>
                 <property name="series" value=""/>
@@ -18481,7 +18481,7 @@ utils.export_data_if_needed(df, props)
                 <property name="Plot.Antialias" value="true"/>
                 <property name="image_export_width" value="6"/>
             </chart>
-            <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/barchart.png" id="1517130317" name="Max Queue per tutti i receiver nodes" resultTypes="scalar" template="barchart_native" type="BAR">
+            <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/barchart.png" id="276954907" name="Max Queue per tutti i receiver nodes" resultTypes="scalar" template="barchart_native" type="BAR">
                 <script><![CDATA[from omnetpp.scave import results, chart, utils
 
 # get chart properties
@@ -19133,7 +19133,7 @@ utils.export_data_if_needed(df, props)
                 <property name="baseline" value="0"/>
                 <property name="image_export_filename" value=""/>
                 <property name="legend_format" value=""/>
-                <property name="filter" value="module =~ &quot;*.*.mac&quot; AND name =~ &quot;maxRxQueueSize&quot;"/>
+                <property name="filter" value="(module =~ &quot;*.CU.mac&quot; OR module =~ &quot;*.HU.mac&quot; OR module =~ &quot;*.S1.mac&quot; OR &#10; module =~ &quot;*.S2.mac&quot; OR module =~ &quot;*.S3.mac&quot; OR module =~ &quot;*.S4.mac&quot; OR &#10; module =~ &quot;*.RS1.mac&quot; OR module =~ &quot;*.RS2.mac&quot;) &#10;AND name =~ &quot;maxRxQueueSize&quot;"/>
                 <property name="X.Label.Wrap" value="true"/>
                 <property name="secondary_ordering_regex_list" value=""/>
                 <property name="series" value=""/>
@@ -19144,7 +19144,7 @@ utils.export_data_if_needed(df, props)
                 <property name="Plot.Antialias" value="true"/>
                 <property name="image_export_width" value="6"/>
             </chart>
-            <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/barchart.png" id="522633897" name="Max Queue per tutte le porte degli switch" resultTypes="scalar" template="barchart_native" type="BAR">
+            <chart createdWith="OMNeT++ 6.2.0.250714-83e173e93a" icon="icons/full/obj/barchart.png" id="1702101429" name="Max Queue per tutte le porte degli switch" resultTypes="scalar" template="barchart_native" type="BAR">
                 <script><![CDATA[from omnetpp.scave import results, chart, utils
 
 # get chart properties

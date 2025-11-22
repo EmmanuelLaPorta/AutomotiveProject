@@ -240,6 +240,8 @@ void TDMAScheduler::defineFlows() {
 
 }
 
+
+
 void TDMAScheduler::generateOptimizedSchedule() {
     EV << "Generazione schedule ottimizzato..." << endl;
     
@@ -287,199 +289,193 @@ void TDMAScheduler::generateOptimizedSchedule() {
         EV_DEBUG << "Scheduling " << flow.id << ": " << numTransmissions 
                  << " trasmissioni ogni " << flow.period << endl;
         
-       for (int i = 0; i < numTransmissions; i++) {
-			simtime_t idealOffset = i * flow.period;
-			simtime_t senderStart = std::max(idealOffset, nextAvailableTime[flow.src]);
-			
-			// ORDINE CORRETTO: più specifico prima
-			if (isMulticast && flow.isFragmented) {
-				// MULTICAST FRAMMENTATO (Flow 6)
-				EV_DEBUG << "Scheduling multicast fragmented flow " << flow.id
-						 << " with " << flow.fragmentCount << " fragments to "
-						 << destinations.size() << " destinations" << endl;
+        for (int i = 0; i < numTransmissions; i++) {
+            simtime_t idealOffset = i * flow.period;
+            simtime_t senderStart = std::max(idealOffset, nextAvailableTime[flow.src]);
+            
+            // ORDINE CORRETTO: più specifico prima
+            if (isMulticast && flow.isFragmented) {
+                // ===== MULTICAST FRAMMENTATO (Flow 6) =====
+                EV_DEBUG << "Scheduling multicast fragmented flow " << flow.id
+                         << " transmission " << i << " with " << flow.fragmentCount 
+                         << " fragments" << endl;
 
-				simtime_t burstDuration = flow.txTime * flow.fragmentCount +
-										  tdma::getIfgTime() * (flow.fragmentCount - 1);
+                // Determina quale destinazione serve questo slot (alterna)
+                int destIdx = i % destinations.size();
+                std::string destForThisSlot = destinations[destIdx];
+                
+                simtime_t burstDuration = flow.txTime * flow.fragmentCount +
+                                          tdma::getIfgTime() * (flow.fragmentCount - 1);
 
-				// Alloca slot per OGNI destinazione separatamente
-				for (size_t destIdx = 0; destIdx < destinations.size(); destIdx++) {
-					simtime_t destSenderStart = std::max(senderStart, nextAvailableTime[flow.src]);
+                // Slot sender per UNA SOLA destinazione
+                schedule.push_back({
+                    .flowId = flow.id,
+                    .node = flow.src,
+                    .offset = senderStart,
+                    .duration = burstDuration,
+                    .type = SLOT_SENDER
+                });
 
-					// Slot sender per questa destinazione
-					schedule.push_back({
-						.flowId = flow.id,
-						.node = flow.src,
-						.offset = destSenderStart,
-						.duration = burstDuration,
-						.type = SLOT_SENDER
-					});
+                nextAvailableTime[flow.src] = senderStart + burstDuration + tdma::getGuardTime();
 
-					nextAvailableTime[flow.src] = destSenderStart + burstDuration + tdma::getGuardTime();
+                // Path specifico per questa destinazione
+                std::vector<std::string> specificPath = getPathTo(flow.src, destForThisSlot);
 
-					// Path per questa destinazione specifica
-					std::vector<std::string> specificPath = getPathTo(flow.src, destinations[destIdx]);
+                // UN SOLO slot switch per l'intero burst (pipeline)
+                simtime_t switchTime = senderStart + flow.txTime + tdma::getPropagationDelay();
+                
+                for (size_t j = 1; j < specificPath.size() - 1; j++) {
+                    std::string node = specificPath[j];
+                    
+                    if (node.find("switch") != std::string::npos) {
+                        switchTime += tdma::getSwitchDelay();
+                        simtime_t switchStart = std::max(switchTime, nextAvailableTime[node]);
+                        
+                        schedule.push_back({
+                            .flowId = flow.id + "_" + destForThisSlot,
+                            .node = node,
+                            .offset = switchStart,
+                            .duration = burstDuration,
+                            .type = SLOT_SWITCH
+                        });
+                        
+                        nextAvailableTime[node] = switchStart + burstDuration + tdma::getGuardTime();
+                        switchTime = switchStart + burstDuration;
+                    }
+                }
+                
+            } else if (isMulticast) {
+                // ===== MULTICAST NORMALE (Flow 2 - Audio) =====
+                schedule.push_back({
+                    .flowId = flow.id,
+                    .node = flow.src,
+                    .offset = senderStart,
+                    .duration = flow.txTime * destinations.size(),
+                    .type = SLOT_SENDER
+                });
+                
+                // Aggiorna tempo disponibile considerando tutto il burst
+                simtime_t burstDuration = flow.txTime * destinations.size() + 
+                                         tdma::getIfgTime() * (destinations.size() - 1);
+                nextAvailableTime[flow.src] = senderStart + burstDuration + tdma::getGuardTime();
+                
+                // Schedula switch per OGNI destinazione
+                for (const auto& dest : destinations) {
+                    std::vector<std::string> specificPath = getPathTo(flow.src, dest);
+                    
+                    simtime_t currentTime = senderStart + flow.txTime;
+                    
+                    for (size_t j = 1; j < specificPath.size() - 1; j++) {
+                        std::string node = specificPath[j];
+                        
+                        if (node.find("switch") != std::string::npos) {
+                            currentTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
+                            simtime_t switchStart = std::max(currentTime, nextAvailableTime[node]);
+                            
+                            schedule.push_back({
+                                .flowId = flow.id + "_" + dest,
+                                .node = node,
+                                .offset = switchStart,
+                                .duration = flow.txTime,
+                                .type = SLOT_SWITCH
+                            });
+                            
+                            nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
+                            currentTime = switchStart + flow.txTime;
+                        }
+                    }
+                }
+                
+            } else if (flow.isFragmented) {
+                // ===== UNICAST FRAMMENTATO (Flow 4, 5, 8) =====
+                simtime_t burstDuration = flow.txTime * flow.fragmentCount +
+                                          tdma::getIfgTime() * (flow.fragmentCount - 1);
 
-					// Schedula switch per ogni frammento
-					simtime_t currentTime = destSenderStart;
+                EV_DEBUG << "Scheduling fragmented flow " << flow.id 
+                         << " transmission " << i << " with " << flow.fragmentCount 
+                         << " fragments, burst duration=" << burstDuration << endl;
 
-					for (int fragIdx = 0; fragIdx < flow.fragmentCount; fragIdx++) {
-						currentTime += flow.txTime;
-						if (fragIdx > 0) currentTime += tdma::getIfgTime();
+                // Slot sender per l'intero burst
+                schedule.push_back({
+                    .flowId = flow.id,
+                    .node = flow.src,
+                    .offset = senderStart,
+                    .duration = burstDuration,
+                    .type = SLOT_SENDER
+                });
 
-						simtime_t switchTime = currentTime;
-
-						for (size_t j = 1; j < specificPath.size() - 1; j++) {
-							std::string node = specificPath[j];
-
-							if (node.find("switch") != std::string::npos) {
-								switchTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
-								simtime_t switchStart = std::max(switchTime, nextAvailableTime[node]);
-
-								schedule.push_back({
-									.flowId = flow.id + "_" + destinations[destIdx],
-									.node = node,
-									.offset = switchStart,
-									.duration = flow.txTime,
-									.type = SLOT_SWITCH
-								});
-
-								nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
-								switchTime = switchStart + flow.txTime;
-							}
-						}
-					}
-					
-					// Aggiorna senderStart per prossima destinazione
-					senderStart = nextAvailableTime[flow.src];
-				}
-				
-			} else if (isMulticast) {
-				// MULTICAST NORMALE (Flow 2 - Audio)
-				schedule.push_back({
-					.flowId = flow.id,
-					.node = flow.src,
-					.offset = senderStart,
-					.duration = flow.txTime * destinations.size(),
-					.type = SLOT_SENDER
-				});
-				
-				// Aggiorna tempo disponibile considerando tutto il burst
-				simtime_t burstDuration = flow.txTime * destinations.size() + 
-										 tdma::getGuardTime() * (destinations.size() - 1);
-				nextAvailableTime[flow.src] = senderStart + burstDuration + tdma::getGuardTime();
-				
-				// Schedula switch per OGNI destinazione
-				for (const auto& dest : destinations) {
-					std::vector<std::string> specificPath = getPathTo(flow.src, dest);
-					
-					simtime_t currentTime = senderStart + flow.txTime;
-					
-					for (size_t j = 1; j < specificPath.size() - 1; j++) {
-						std::string node = specificPath[j];
-						
-						if (node.find("switch") != std::string::npos) {
-							currentTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
-							simtime_t switchStart = std::max(currentTime, nextAvailableTime[node]);
-							
-							schedule.push_back({
-								.flowId = flow.id + "_" + dest,
-								.node = node,
-								.offset = switchStart,
-								.duration = flow.txTime,
-								.type = SLOT_SWITCH
-							});
-							
-							nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
-							currentTime = switchStart + flow.txTime;
-						}
-					}
-				}
-				
-			} else if (flow.isFragmented) {
-				// UNICAST FRAMMENTATO (Flow 4, 5, 8)
-				simtime_t burstDuration = flow.txTime * flow.fragmentCount +
-										  tdma::getIfgTime() * (flow.fragmentCount - 1);
-
-				EV_DEBUG << "Scheduling fragmented flow " << flow.id 
-						 << " with " << flow.fragmentCount << " fragments, "
-						 << "burst duration=" << burstDuration << endl;
-
-				// Slot sender per l'intero burst
-				schedule.push_back({
-					.flowId = flow.id,
-					.node = flow.src,
-					.offset = senderStart,
-					.duration = burstDuration,
-					.type = SLOT_SENDER
-				});
-
-				nextAvailableTime[flow.src] = senderStart + burstDuration + tdma::getGuardTime();
-				
-				// Gli switch processano i frammenti in sequenza
-				simtime_t currentTime = senderStart;
-				
-				for (int fragIdx = 0; fragIdx < flow.fragmentCount; fragIdx++) {
-					currentTime += flow.txTime;
-					if (fragIdx > 0) currentTime += tdma::getIfgTime();
-					
-					simtime_t switchTime = currentTime;
-					
-					for (size_t j = 1; j < flow.path.size() - 1; j++) {
-						std::string node = flow.path[j];
-						
-						if (node.find("switch") != std::string::npos) {
-							switchTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
-							simtime_t switchStart = std::max(switchTime, nextAvailableTime[node]);
-							
-							schedule.push_back({
-								.flowId = flow.id,
-								.node = node,
-								.offset = switchStart,
-								.duration = flow.txTime,
-								.type = SLOT_SWITCH
-							});
-							
-							nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
-							switchTime = switchStart + flow.txTime;
-						}
-					}
-				}
-				
-			} else {
-				// UNICAST NORMALE (Flow 1, 3, 7)
-				schedule.push_back({
-					.flowId = flow.id,
-					.node = flow.src,
-					.offset = senderStart,
-					.duration = flow.txTime,
-					.type = SLOT_SENDER
-				});
-				
-				nextAvailableTime[flow.src] = senderStart + flow.txTime + tdma::getGuardTime();
-				
-				simtime_t currentTime = senderStart + flow.txTime;
-				
-				for (size_t j = 1; j < flow.path.size() - 1; j++) {
-					std::string node = flow.path[j];
-					
-					if (node.find("switch") != std::string::npos) {
-						currentTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
-						simtime_t switchStart = std::max(currentTime, nextAvailableTime[node]);
-						
-						schedule.push_back({
-							.flowId = flow.id,
-							.node = node,
-							.offset = switchStart,
-							.duration = flow.txTime,
-							.type = SLOT_SWITCH
-						});
-						
-						nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
-						currentTime = switchStart + flow.txTime;
-					}
-				}
-			}
-		}
+                nextAvailableTime[flow.src] = senderStart + burstDuration + tdma::getGuardTime();
+                
+                // Gli switch processano i frammenti in pipeline
+                // UN SOLO slot switch per l'intero burst
+                simtime_t switchTime = senderStart + flow.txTime + tdma::getPropagationDelay();
+                
+                for (size_t j = 1; j < flow.path.size() - 1; j++) {
+                    std::string node = flow.path[j];
+                    
+                    if (node.find("switch") != std::string::npos) {
+                        switchTime += tdma::getSwitchDelay();
+                        simtime_t switchStart = std::max(switchTime, nextAvailableTime[node]);
+                        
+                        // UN SOLO slot per l'intero burst
+                        schedule.push_back({
+                            .flowId = flow.id,
+                            .node = node,
+                            .offset = switchStart,
+                            .duration = burstDuration,
+                            .type = SLOT_SWITCH
+                        });
+                        
+                        nextAvailableTime[node] = switchStart + burstDuration + tdma::getGuardTime();
+                        switchTime = switchStart + burstDuration;
+                    }
+                }
+                
+            } else {
+                // ===== UNICAST NORMALE (Flow 1, 3, 7) =====
+                schedule.push_back({
+                    .flowId = flow.id,
+                    .node = flow.src,
+                    .offset = senderStart,
+                    .duration = flow.txTime,
+                    .type = SLOT_SENDER
+                });
+                
+                nextAvailableTime[flow.src] = senderStart + flow.txTime + tdma::getGuardTime();
+                
+                simtime_t currentTime = senderStart + flow.txTime;
+                
+                for (size_t j = 1; j < flow.path.size() - 1; j++) {
+                    std::string node = flow.path[j];
+                    
+                    if (node.find("switch") != std::string::npos) {
+                        currentTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
+                        simtime_t switchStart = std::max(currentTime, nextAvailableTime[node]);
+                        
+                        schedule.push_back({
+                            .flowId = flow.id,
+                            .node = node,
+                            .offset = switchStart,
+                            .duration = flow.txTime,
+                            .type = SLOT_SWITCH
+                        });
+                        
+                        nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
+                        currentTime = switchStart + flow.txTime;
+                    }
+                }
+            }
+            
+            // MODIFICA CRITICA: Resetta nextAvailableTime per permettere scheduling periodico
+            // Evita che le trasmissioni successive vengano bloccate dall'avanzamento del tempo
+            if (i < numTransmissions - 1) {
+                simtime_t nextIdealStart = (i + 1) * flow.period;
+                // Resetta solo se non c'è conflitto imminente
+                if (nextAvailableTime[flow.src] < nextIdealStart) {
+                    nextAvailableTime[flow.src] = nextIdealStart;
+                }
+            }
+        }
     }
     
     EV << "Schedule generato: " << schedule.size() << " slot totali" << endl;
