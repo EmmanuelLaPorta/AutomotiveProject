@@ -16,6 +16,7 @@ protected:
     std::map<std::string, simtime_t> maxDelayPerFlow;
     std::map<std::string, simtime_t> maxJitterPerFlow;
     std::map<std::string, simtime_t> lastPacketTimePerFlow;
+    std::map<std::string, double> lastDelayMap; // Added for Jitter calculation
 
     // Statistiche aggregate (TOTAL)
     simtime_t maxDelayTotal;

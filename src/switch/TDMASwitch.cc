@@ -40,14 +40,31 @@ void TDMASwitch::loadMacTable() {
         if (arrowPos == std::string::npos) continue;
         
         std::string mac = entry.substr(0, arrowPos);
-        int port = std::stoi(entry.substr(arrowPos + 2));
+        std::string portsStr = entry.substr(arrowPos + 2);
         
         // Rimuovi spazi dal MAC
         mac.erase(0, mac.find_first_not_of(" \t"));
         mac.erase(mac.find_last_not_of(" \t") + 1);
         
-        macTable[mac] = port;
-        EV_DEBUG << "MAC " << mac << " -> port " << port << endl;
+        // Parse ports (separated by ;)
+        std::stringstream pss(portsStr);
+        std::string portToken;
+        std::vector<int> ports;
+        
+        while (std::getline(pss, portToken, ';')) {
+             try {
+                ports.push_back(std::stoi(portToken));
+             } catch (...) {
+                 EV_ERROR << "Invalid port in config: " << portToken << endl;
+             }
+        }
+
+        if (!ports.empty()) {
+            macTable[mac] = ports;
+            EV_DEBUG << "MAC " << mac << " -> ports " << ports.size() << " [";
+            for(int p : ports) EV_DEBUG << p << " ";
+            EV_DEBUG << "]" << endl;
+        }
     }
 }
 
@@ -103,45 +120,64 @@ void TDMASwitch::handleSelfMessage(cMessage *msg) {
 
 void TDMASwitch::processAndForward(TDMAFrame *frame, int arrivalPort) {
     std::string dstMac = frame->getDstAddr();
+    std::string srcMac = frame->getSrcAddr();
+
+    EV << "Switch " << getName() << ": frame " << srcMac 
+       << " -> " << dstMac << " (port " << arrivalPort << ")" << endl;
     
-    EV << "Switch " << getName() << ": frame " << frame->getSrcAddr() 
-       << " -> " << dstMac << " (port " << arrivalPort << ")" << endl; // DEBUG
-    
-    // Lookup porta di destinazione
-    int destPort = -1;
-    auto it = macTable.find(dstMac);
-    
-    if (it != macTable.end()) {
-        destPort = it->second;
-        EV << "  -> instrado su porta " << destPort << endl; // DEBUG
+    // --- MAC LEARNING ---
+    // Se non conosciamo il MAC sorgente, lo impariamo associandolo alla porta di arrivo
+    if (macTable.find(srcMac) == macTable.end()) {
+        macTable[srcMac] = {arrivalPort};
+        EV << "  [MAC Learning] Learned " << srcMac << " -> port " << arrivalPort << endl;
     } else {
-        EV_WARN << "MAC " << dstMac << " not found in " << getName() << ", dropping frame" << endl;
-        delete frame;
-        return;
+        // Opzionale: aggiorna se cambiato (es. mobilità, ma qui è statico)
+    }
+
+    // --- FORWARDING ---
+    std::vector<int> destPorts;
+    
+    auto it = macTable.find(dstMac);
+    if (it != macTable.end()) {
+        // Destinazione nota (Unicast o Multicast)
+        destPorts = it->second;
+        EV << "  -> forwarding to " << destPorts.size() << " ports" << endl;
+    } else {
+        // Destinazione sconosciuta: FLOODING (tranne porta arrivo)
+        EV_WARN << "MAC " << dstMac << " unknown -> FLOODING" << endl;
+        for (int i = 0; i < numPorts; i++) {
+            if (i != arrivalPort) {
+                destPorts.push_back(i);
+            }
+        }
     }
     
-    // Previeni loop
-    if (destPort == arrivalPort) {
-        EV_DEBUG << "Loop detected, dropping frame" << endl;
-        delete frame;
-        return;
+    // Invia su tutte le porte identificate
+    for (int destPort : destPorts) {
+        // Previeni loop (non rispedire indietro)
+        if (destPort == arrivalPort) continue;
+        
+        // Duplica frame per ogni porta (tranne l'ultima per efficienza, ma qui duplichiamo sempre per sicurezza)
+        TDMAFrame *copy = frame->dup();
+        
+        // Accoda
+        portQueues[destPort].push(copy);
+        
+        // Stats
+        int qSize = portQueues[destPort].size();
+        if (qSize > maxQueueDepth[destPort]) {
+            maxQueueDepth[destPort] = qSize;
+        }
+        emit(registerSignal("queueLength"), qSize);
+        
+        // Trasmetti se libero
+        if (!portBusy[destPort]) {
+            transmitFrame(destPort);
+        }
     }
     
-    // Accoda per trasmissione
-    portQueues[destPort].push(frame);
-    
-    // Aggiorna statistiche
-    int qSize = portQueues[destPort].size();
-    if (qSize > maxQueueDepth[destPort]) {
-        maxQueueDepth[destPort] = qSize;
-    }
-    
-    emit(registerSignal("queueLength"), qSize);
-    
-    // Trasmetti se porta libera
-    if (!portBusy[destPort]) {
-        transmitFrame(destPort);
-    }
+    // Il frame originale non serve più (abbiamo inviato copie o scartato)
+    delete frame;
 }
 
 void TDMASwitch::transmitFrame(int port) {

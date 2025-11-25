@@ -17,7 +17,8 @@ protected:
     int numPorts;
     simtime_t switchingDelay;
     
-    std::map<std::string, int> macTable;
+    // MAC Table: MAC Address -> Vector of Output Ports (for Multicast)
+    std::map<std::string, std::vector<int>> macTable;
     std::map<int, std::queue<cPacket*>> portQueues;
     std::map<int, bool> portBusy;
     std::map<int, int> maxQueueDepth;

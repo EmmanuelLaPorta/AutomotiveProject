@@ -242,237 +242,192 @@ void TDMAScheduler::defineFlows() {
 
 
 
+// Struttura per un singolo job di trasmissione (frammento)
+struct Job {
+    std::string flowId;
+    std::string srcNode;
+    simtime_t releaseTime;
+    simtime_t deadline;
+    simtime_t txDuration;
+    int priority;
+    int fragmentIndex;
+    int totalFragments;
+    bool isMulticast;
+    std::vector<std::string> destinations;
+    std::vector<std::string> path; // Path principale (o primo path per multicast)
+};
+
 void TDMAScheduler::generateOptimizedSchedule() {
-    EV << "Generazione schedule ottimizzato..." << endl;
+    EV << "Generazione schedule ottimizzato (INTERLEAVED)..." << endl;
     
-    // Ordina flussi per priorità
-    std::sort(flows.begin(), flows.end(), 
-        [](const Flow& a, const Flow& b) {
-            return a.priority < b.priority;
-        });
+    std::vector<Job> jobs;
     
-    // Calcola frame size per ogni flusso
-    for (auto& flow : flows) {
-        if (flow.isFragmented) {
-            // Per flussi frammentati, calcola tempo per UN frammento
-            int fragmentSize = (flow.payload <= tdma::MTU_BYTES) ? 
-                              flow.payload : tdma::MTU_BYTES;
-            flow.txTime = calculateTxTime(fragmentSize);
-            
-            EV << "Flow " << flow.id << " frammentato: " 
-               << flow.fragmentCount << " frammenti da " 
-               << fragmentSize << " byte, txTime=" << flow.txTime << endl;
-        } else {
-            flow.txTime = calculateTxTime(flow.payload);
-        }
-    }
-    
-    std::map<std::string, simtime_t> nextAvailableTime;
-    
+    // 1. Generazione di tutti i Job (frammenti) nel periodo
     for (auto& flow : flows) {
         int numTransmissions = (int)(hyperperiod / flow.period);
         
-        // Controlla se è multicast
+        // Calcola txTime per frammento
+        simtime_t fragmentTxTime;
+        if (flow.isFragmented) {
+             int fragmentSize = (flow.payload <= tdma::MTU_BYTES) ? flow.payload : tdma::MTU_BYTES;
+             fragmentTxTime = calculateTxTime(fragmentSize);
+        } else {
+             fragmentTxTime = calculateTxTime(flow.payload);
+        }
+        flow.txTime = fragmentTxTime; // Aggiorna flow struct per uso futuro
+
+        // Multicast parsing
         bool isMulticast = (flow.dst.find(',') != std::string::npos);
         std::vector<std::string> destinations;
-        
         if (isMulticast) {
-            // Parsing destinazioni multiple
             std::stringstream ss(flow.dst);
             std::string dest;
-            while (std::getline(ss, dest, ',')) {
-                destinations.push_back(dest);
-            }
-            EV << "Flow multicast " << flow.id << " verso " << destinations.size() << " destinazioni" << endl;
+            while (std::getline(ss, dest, ',')) destinations.push_back(dest);
+        } else {
+            destinations.push_back(flow.dst);
         }
-        
-        EV_DEBUG << "Scheduling " << flow.id << ": " << numTransmissions 
-                 << " trasmissioni ogni " << flow.period << endl;
-        
+
         for (int i = 0; i < numTransmissions; i++) {
-            simtime_t idealOffset = i * flow.period;
-            simtime_t senderStart = std::max(idealOffset, nextAvailableTime[flow.src]);
+            simtime_t releaseTime = i * flow.period;
+            simtime_t deadline = (i + 1) * flow.period;
             
-            // ORDINE CORRETTO: più specifico prima
-            if (isMulticast && flow.isFragmented) {
-                // ===== MULTICAST FRAMMENTATO (Flow 6) =====
-                EV_DEBUG << "Scheduling multicast fragmented flow " << flow.id
-                         << " transmission " << i << " with " << flow.fragmentCount 
-                         << " fragments" << endl;
-
-                // Determina quale destinazione serve questo slot (alterna)
-                int destIdx = i % destinations.size();
-                std::string destForThisSlot = destinations[destIdx];
+            int numFragments = flow.isFragmented ? flow.fragmentCount : 1;
+            
+            for (int k = 0; k < numFragments; k++) {
+                Job job;
+                job.flowId = flow.id;
+                job.srcNode = flow.src;
+                job.releaseTime = releaseTime; // Tutti i frammenti pronti all'inizio del periodo
+                job.deadline = deadline;
+                job.txDuration = fragmentTxTime;
+                job.priority = flow.priority;
+                job.fragmentIndex = k;
+                job.totalFragments = numFragments;
+                job.isMulticast = isMulticast;
+                job.destinations = destinations;
+                job.path = flow.path;
                 
-                simtime_t burstDuration = flow.txTime * flow.fragmentCount +
-                                          tdma::getIfgTime() * (flow.fragmentCount - 1);
-
-                // Slot sender per UNA SOLA destinazione
-                schedule.push_back({
-                    .flowId = flow.id,
-                    .node = flow.src,
-                    .offset = senderStart,
-                    .duration = burstDuration,
-                    .type = SLOT_SENDER
-                });
-
-                nextAvailableTime[flow.src] = senderStart + burstDuration + tdma::getGuardTime();
-
-                // Path specifico per questa destinazione
-                std::vector<std::string> specificPath = getPathTo(flow.src, destForThisSlot);
-
-                // UN SOLO slot switch per l'intero burst (pipeline)
-                simtime_t switchTime = senderStart + flow.txTime + tdma::getPropagationDelay();
+                jobs.push_back(job);
+            }
+        }
+    }
+    
+    // 2. Ordinamento Jobs
+    // Priorità: Classe (basso valore = alta priorità) -> Release Time -> Deadline
+    std::sort(jobs.begin(), jobs.end(), [](const Job& a, const Job& b) {
+        if (a.priority != b.priority) return a.priority < b.priority;
+        if (a.releaseTime != b.releaseTime) return a.releaseTime < b.releaseTime;
+        return a.deadline < b.deadline;
+    });
+    
+    EV << "Totale Jobs da schedulare: " << jobs.size() << endl;
+    
+    // 3. Scheduling Frame-by-Frame
+    // Mappa per tracciare occupazione link: Node -> NextAvailableTime
+    std::map<std::string, simtime_t> nodeFreeTime;
+    
+    for (const auto& job : jobs) {
+        // Cerca primo slot valido per il sender
+        simtime_t candidateStart = std::max(job.releaseTime, nodeFreeTime[job.srcNode]);
+        
+        bool scheduled = false;
+        simtime_t bestStart = candidateStart;
+        
+        // Tentativo di trovare uno slot che funzioni per TUTTO il percorso (Path Delay Compensation)
+        // Per semplicità, in questa implementazione statica, avanziamo finché non troviamo spazio su tutti i link.
+        // Un approccio più sofisticato userebbe time-windows.
+        
+        while (!scheduled) {
+            // Verifica disponibilità Sender
+            if (bestStart < nodeFreeTime[job.srcNode]) {
+                bestStart = nodeFreeTime[job.srcNode];
+            }
+            
+            // Calcola tempi arrivo previsti agli switch
+            simtime_t currentArrival = bestStart + job.txDuration + tdma::getPropagationDelay();
+            bool pathFree = true;
+            simtime_t requiredDelay = 0; // Ritardo aggiuntivo necessario se uno switch è occupato
+            
+            // Per multicast, dobbiamo verificare TUTTI i path verso le destinazioni
+            // Qui semplifichiamo controllando i nodi coinvolti.
+            // Recuperiamo tutti i nodi unici coinvolti nella trasmissione
+            std::vector<std::string> nodesToCheck;
+            
+            // Costruiamo l'albero di trasmissione (semplificato: unione dei path)
+            // Nota: job.path è solo UN path. Per multicast dobbiamo iterare le destinazioni.
+            
+            // Mappa: Node -> ArrivalTimeAtNode
+            std::map<std::string, simtime_t> arrivalTimes;
+            
+            for (const auto& dest : job.destinations) {
+                std::vector<std::string> path = getPathTo(job.srcNode, dest);
+                simtime_t pathTime = currentArrival; // Tempo arrivo al primo switch
                 
-                for (size_t j = 1; j < specificPath.size() - 1; j++) {
-                    std::string node = specificPath[j];
-                    
-                    if (node.find("switch") != std::string::npos) {
-                        switchTime += tdma::getSwitchDelay();
-                        simtime_t switchStart = std::max(switchTime, nextAvailableTime[node]);
-                        
-                        schedule.push_back({
-                            .flowId = flow.id + "_" + destForThisSlot,
-                            .node = node,
-                            .offset = switchStart,
-                            .duration = burstDuration,
-                            .type = SLOT_SWITCH
-                        });
-                        
-                        nextAvailableTime[node] = switchStart + burstDuration + tdma::getGuardTime();
-                        switchTime = switchStart + burstDuration;
-                    }
-                }
-                
-            } else if (isMulticast) {
-                // ===== MULTICAST NORMALE (Flow 2 - Audio) =====
-                schedule.push_back({
-                    .flowId = flow.id,
-                    .node = flow.src,
-                    .offset = senderStart,
-                    .duration = flow.txTime * destinations.size(),
-                    .type = SLOT_SENDER
-                });
-                
-                // Aggiorna tempo disponibile considerando tutto il burst
-                simtime_t burstDuration = flow.txTime * destinations.size() + 
-                                         tdma::getIfgTime() * (destinations.size() - 1);
-                nextAvailableTime[flow.src] = senderStart + burstDuration + tdma::getGuardTime();
-                
-                // Schedula switch per OGNI destinazione
-                for (const auto& dest : destinations) {
-                    std::vector<std::string> specificPath = getPathTo(flow.src, dest);
-                    
-                    simtime_t currentTime = senderStart + flow.txTime;
-                    
-                    for (size_t j = 1; j < specificPath.size() - 1; j++) {
-                        std::string node = specificPath[j];
-                        
-                        if (node.find("switch") != std::string::npos) {
-                            currentTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
-                            simtime_t switchStart = std::max(currentTime, nextAvailableTime[node]);
-                            
-                            schedule.push_back({
-                                .flowId = flow.id + "_" + dest,
-                                .node = node,
-                                .offset = switchStart,
-                                .duration = flow.txTime,
-                                .type = SLOT_SWITCH
-                            });
-                            
-                            nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
-                            currentTime = switchStart + flow.txTime;
+                for (size_t j = 1; j < path.size() - 1; j++) { // Salta src e dst
+                    std::string sw = path[j];
+                    if (sw.find("switch") != std::string::npos) {
+                        if (arrivalTimes.find(sw) == arrivalTimes.end()) {
+                            arrivalTimes[sw] = pathTime;
                         }
+                        // Avanza tempo per prossimo hop
+                        pathTime += tdma::getSwitchDelay() + tdma::getPropagationDelay(); 
                     }
                 }
+            }
+            
+            // Verifica disponibilità su tutti gli switch coinvolti
+            for (const auto& entry : arrivalTimes) {
+                std::string sw = entry.first;
+                simtime_t arrival = entry.second;
                 
-            } else if (flow.isFragmented) {
-                // ===== UNICAST FRAMMENTATO (Flow 4, 5, 8) =====
-                simtime_t burstDuration = flow.txTime * flow.fragmentCount +
-                                          tdma::getIfgTime() * (flow.fragmentCount - 1);
-
-                EV_DEBUG << "Scheduling fragmented flow " << flow.id 
-                         << " transmission " << i << " with " << flow.fragmentCount 
-                         << " fragments, burst duration=" << burstDuration << endl;
-
-                // Slot sender per l'intero burst
+                if (arrival < nodeFreeTime[sw]) {
+                    // Switch occupato! Dobbiamo posticipare il sender.
+                    // Quanto? Almeno (nodeFreeTime[sw] - arrival)
+                    simtime_t delayNeeded = nodeFreeTime[sw] - arrival;
+                    if (delayNeeded > requiredDelay) requiredDelay = delayNeeded;
+                    pathFree = false;
+                }
+            }
+            
+            if (pathFree) {
+                // Trovato slot valido! Registra schedule.
+                scheduled = true;
+                
+                // 1. Sender Slot
                 schedule.push_back({
-                    .flowId = flow.id,
-                    .node = flow.src,
-                    .offset = senderStart,
-                    .duration = burstDuration,
+                    .flowId = job.flowId,
+                    .node = job.srcNode,
+                    .offset = bestStart,
+                    .duration = job.txDuration,
                     .type = SLOT_SENDER
                 });
-
-                nextAvailableTime[flow.src] = senderStart + burstDuration + tdma::getGuardTime();
+                nodeFreeTime[job.srcNode] = bestStart + job.txDuration + tdma::getGuardTime();
                 
-                // Gli switch processano i frammenti in pipeline
-                // UN SOLO slot switch per l'intero burst
-                simtime_t switchTime = senderStart + flow.txTime + tdma::getPropagationDelay();
-                
-                for (size_t j = 1; j < flow.path.size() - 1; j++) {
-                    std::string node = flow.path[j];
+                // 2. Switch Slots
+                for (const auto& entry : arrivalTimes) {
+                    std::string sw = entry.first;
+                    simtime_t arrival = entry.second;
                     
-                    if (node.find("switch") != std::string::npos) {
-                        switchTime += tdma::getSwitchDelay();
-                        simtime_t switchStart = std::max(switchTime, nextAvailableTime[node]);
-                        
-                        // UN SOLO slot per l'intero burst
-                        schedule.push_back({
-                            .flowId = flow.id,
-                            .node = node,
-                            .offset = switchStart,
-                            .duration = burstDuration,
-                            .type = SLOT_SWITCH
-                        });
-                        
-                        nextAvailableTime[node] = switchStart + burstDuration + tdma::getGuardTime();
-                        switchTime = switchStart + burstDuration;
-                    }
+                    schedule.push_back({
+                        .flowId = job.flowId,
+                        .node = sw,
+                        .offset = arrival,
+                        .duration = job.txDuration,
+                        .type = SLOT_SWITCH
+                    });
+                    nodeFreeTime[sw] = arrival + job.txDuration + tdma::getGuardTime();
                 }
                 
             } else {
-                // ===== UNICAST NORMALE (Flow 1, 3, 7) =====
-                schedule.push_back({
-                    .flowId = flow.id,
-                    .node = flow.src,
-                    .offset = senderStart,
-                    .duration = flow.txTime,
-                    .type = SLOT_SENDER
-                });
+                // Riprova più tardi
+                bestStart += requiredDelay + tdma::getGuardTime(); // Aggiungi un piccolo step
                 
-                nextAvailableTime[flow.src] = senderStart + flow.txTime + tdma::getGuardTime();
-                
-                simtime_t currentTime = senderStart + flow.txTime;
-                
-                for (size_t j = 1; j < flow.path.size() - 1; j++) {
-                    std::string node = flow.path[j];
-                    
-                    if (node.find("switch") != std::string::npos) {
-                        currentTime += tdma::getPropagationDelay() + tdma::getSwitchDelay();
-                        simtime_t switchStart = std::max(currentTime, nextAvailableTime[node]);
-                        
-                        schedule.push_back({
-                            .flowId = flow.id,
-                            .node = node,
-                            .offset = switchStart,
-                            .duration = flow.txTime,
-                            .type = SLOT_SWITCH
-                        });
-                        
-                        nextAvailableTime[node] = switchStart + flow.txTime + tdma::getGuardTime();
-                        currentTime = switchStart + flow.txTime;
-                    }
-                }
-            }
-            
-            // MODIFICA CRITICA: Resetta nextAvailableTime per permettere scheduling periodico
-            // Evita che le trasmissioni successive vengano bloccate dall'avanzamento del tempo
-            if (i < numTransmissions - 1) {
-                simtime_t nextIdealStart = (i + 1) * flow.period;
-                // Resetta solo se non c'è conflitto imminente
-                if (nextAvailableTime[flow.src] < nextIdealStart) {
-                    nextAvailableTime[flow.src] = nextIdealStart;
+                // Safety check loop infinito
+                if (bestStart > job.deadline) {
+                    EV_WARN << "Job " << job.flowId << " missed deadline!" << endl;
+                    // Forziamo schedule o droppiamo? Per ora scheduliamo comunque per vedere l'errore
+                    // scheduled = true; // Uncomment to force
+                    // break;
                 }
             }
         }
@@ -550,13 +505,10 @@ bool TDMAScheduler::verifyNoCollisions() {
 void TDMAScheduler::configureSenders() {
     EV << "=== Configurazione Senders ===" << endl;
 
-    // Mappa: nodeName -> indice sender da usare
     std::map<std::string, int> senderIndices;
 
     for (const auto& flow : flows) {
-        // Determina indice sender per questo nodo
         int senderIdx = senderIndices[flow.src]++;
-
         std::string path = flow.src + ".senderApp[" + std::to_string(senderIdx) + "]";
         cModule* sender = getModuleByPath(path.c_str());
         
@@ -570,18 +522,23 @@ void TDMAScheduler::configureSenders() {
         bool first = true;
         int slotCount = 0;
 
+        // Ordina slot per tempo
+        std::vector<simtime_t> flowSlots;
         for (const auto& slot : schedule) {
-            bool matchesFlow = (slot.flowId == flow.id) && (slot.node == flow.src);
-            
-            if (matchesFlow && slot.type == SLOT_SENDER) {
-                if (!first) offsets << ",";
-                offsets << slot.offset.dbl();
-                first = false;
-                slotCount++;
+            if (slot.flowId == flow.id && slot.node == flow.src && slot.type == SLOT_SENDER) {
+                flowSlots.push_back(slot.offset);
             }
         }
+        std::sort(flowSlots.begin(), flowSlots.end());
 
-        if (first) {
+        for (const auto& t : flowSlots) {
+            if (!first) offsets << ",";
+            offsets << t.dbl();
+            first = false;
+            slotCount++;
+        }
+
+        if (slotCount == 0) {
             EV_WARN << "Nessuno slot trovato per " << flow.id << endl;
             continue;
         }
@@ -595,37 +552,21 @@ void TDMAScheduler::configureSenders() {
                 flow.isFragmented ? tdma::MTU_BYTES : flow.payload
             );
             
-            // Configura burst size e destinazione
+            // Configura burst size = 1 (Interleaved)
+            // Con scheduling frame-by-frame, ogni slot è un singolo pacchetto/frammento
+            sender->par("burstSize").setIntValue(1);
+            
             if (flow.dst.find(',') != std::string::npos) {
-                // Multicast
-                int numDest = std::count(flow.dst.begin(), flow.dst.end(), ',') + 1;
-
-                if (flow.isFragmented) {
-                    // Multicast frammentato: burst = fragmentCount (PER UNA destinazione)
-                    // Lo scheduler alloca slot multipli per destinazioni multiple
-                    sender->par("burstSize").setIntValue(flow.fragmentCount);
-                } else {
-                    // Multicast normale: burst = num destinazioni
-                    sender->par("burstSize").setIntValue(numDest);
-                }
                 sender->par("dstAddr").setStringValue("multicast");
-
-                // Salva numero destinazioni per multicast frammentato
-                if (flow.isFragmented) {
-                    sender->par("numDestinations").setIntValue(numDest);
-                }
+                // Per multicast, il sender invia 1 pacchetto che lo switch duplica
+                int numDest = std::count(flow.dst.begin(), flow.dst.end(), ',') + 1;
+                sender->par("numDestinations").setIntValue(numDest);
             } else {
-                // Unicast
-                sender->par("burstSize").setIntValue(
-                    flow.isFragmented ? flow.fragmentCount : 1
-                );
                 sender->par("dstAddr").setStringValue(flow.dstMac);
             }
             
             EV << "Configurato " << path << " (" << flow.id << "): "
-               << slotCount << " slot, burst="
-               << sender->par("burstSize").intValue()
-               << (flow.isFragmented ? " (frammentato)" : "") << endl;
+               << slotCount << " slot (interleaved)" << endl;
             
         } catch (cRuntimeError& e) {
             error("Errore configurazione %s: %s", path.c_str(), e.what());
@@ -634,88 +575,133 @@ void TDMAScheduler::configureSenders() {
 }
 
 void TDMAScheduler::configureSwitches() {
-    std::map<std::string, std::map<std::string, int>> switchTables;
+    std::map<std::string, std::map<std::string, std::string>> switchTables; // MAC -> PortsString
     
-    // Switch1 MAC table
-    switchTables["switch1"]["00:00:00:00:00:05"] = 0; // S1
-    switchTables["switch1"]["00:00:00:00:00:03"] = 1; // LD1
-    switchTables["switch1"]["00:00:00:00:00:07"] = 2; // CU
-    switchTables["switch1"]["00:00:00:00:00:0A"] = 2; // LD2
-    switchTables["switch1"]["00:00:00:00:00:08"] = 2; // S2
-    switchTables["switch1"]["00:00:00:00:00:0B"] = 3; // ME
-    switchTables["switch1"]["00:00:00:00:00:0D"] = 3; // S3
-    switchTables["switch1"]["00:00:00:00:00:11"] = 2; // S4
-    switchTables["switch1"]["00:00:00:00:00:06"] = 4; // HU
-    switchTables["switch1"]["00:00:00:00:00:02"] = 5; // US1
-    switchTables["switch1"]["00:00:00:00:00:09"] = 2; // US2
-    switchTables["switch1"]["00:00:00:00:00:10"] = 2; // US3
-    switchTables["switch1"]["00:00:00:00:00:0C"] = 3; // US4
-    switchTables["switch1"]["00:00:00:00:00:04"] = 6; // CM1
-    switchTables["switch1"]["00:00:00:00:00:01"] = 7; // TLM
-    switchTables["switch1"]["00:00:00:00:00:12"] = 2; // RS1
-    switchTables["switch1"]["00:00:00:00:00:0E"] = 3; // RS2
-    switchTables["switch1"]["00:00:00:00:00:0F"] = 2; // RC
+    // Helper lambda per aggiungere entry
+    auto addEntry = [&](std::string sw, std::string mac, int port) {
+        if (switchTables[sw][mac].empty()) {
+            switchTables[sw][mac] = std::to_string(port);
+        } else {
+            // Se esiste già, appendi (multicast)
+            // Controlla se porta già presente
+            std::string current = switchTables[sw][mac];
+            std::string pStr = std::to_string(port);
+            if (current.find(pStr) == std::string::npos) {
+                switchTables[sw][mac] += ";" + pStr;
+            }
+        }
+    };
+
+    // Configurazione Switch 1
+    addEntry("switch1", "00:00:00:00:00:05", 0); // S1
+    addEntry("switch1", "00:00:00:00:00:03", 1); // LD1
+    addEntry("switch1", "00:00:00:00:00:07", 2); // CU
+    addEntry("switch1", "00:00:00:00:00:0A", 2); // LD2 (via SW2)
+    addEntry("switch1", "00:00:00:00:00:08", 2); // S2 (via SW2)
+    addEntry("switch1", "00:00:00:00:00:0B", 3); // ME
+    addEntry("switch1", "00:00:00:00:00:0D", 3); // S3 (via SW3)
+    addEntry("switch1", "00:00:00:00:00:11", 2); // S4 (via SW2)
+    addEntry("switch1", "00:00:00:00:00:06", 4); // HU
+    addEntry("switch1", "00:00:00:00:00:02", 5); // US1
+    addEntry("switch1", "00:00:00:00:00:09", 2); // US2 (via SW2)
+    addEntry("switch1", "00:00:00:00:00:10", 2); // US3 (via SW2)
+    addEntry("switch1", "00:00:00:00:00:0C", 3); // US4 (via SW3)
+    addEntry("switch1", "00:00:00:00:00:04", 6); // CM1
+    addEntry("switch1", "00:00:00:00:00:01", 7); // TLM
+    addEntry("switch1", "00:00:00:00:00:12", 2); // RS1 (via SW2)
+    addEntry("switch1", "00:00:00:00:00:0E", 3); // RS2 (via SW3)
+    addEntry("switch1", "00:00:00:00:00:0F", 2); // RC (via SW2)
     
-    // Switch2 MAC table
-    switchTables["switch2"]["00:00:00:00:00:08"] = 1; // S2
-    switchTables["switch2"]["00:00:00:00:00:0A"] = 2; // LD2
-    switchTables["switch2"]["00:00:00:00:00:07"] = 3; // CU
-    switchTables["switch2"]["00:00:00:00:00:03"] = 0; // LD1
-    switchTables["switch2"]["00:00:00:00:00:05"] = 0; // S1
-    switchTables["switch2"]["00:00:00:00:00:0B"] = 0; // ME
-    switchTables["switch2"]["00:00:00:00:00:0D"] = 0; // S3
-    switchTables["switch2"]["00:00:00:00:00:11"] = 4; // S4
-    switchTables["switch2"]["00:00:00:00:00:06"] = 0; // HU
-    switchTables["switch2"]["00:00:00:00:00:02"] = 0; // US1
-    switchTables["switch2"]["00:00:00:00:00:09"] = 5; // US2
-    switchTables["switch2"]["00:00:00:00:00:10"] = 4; // US3
-    switchTables["switch2"]["00:00:00:00:00:0C"] = 0; // US4
-    switchTables["switch2"]["00:00:00:00:00:04"] = 0; // CM1
-    switchTables["switch2"]["00:00:00:00:00:01"] = 0; // TLM
-    switchTables["switch2"]["00:00:00:00:00:12"] = 4; // RS1
-    switchTables["switch2"]["00:00:00:00:00:0E"] = 0; // RS2
-    switchTables["switch2"]["00:00:00:00:00:0F"] = 4; // RC
+    // Switch 2
+    addEntry("switch2", "00:00:00:00:00:08", 1); // S2
+    addEntry("switch2", "00:00:00:00:00:0A", 2); // LD2
+    addEntry("switch2", "00:00:00:00:00:07", 3); // CU
+    addEntry("switch2", "00:00:00:00:00:03", 0); // LD1 (via SW1)
+    addEntry("switch2", "00:00:00:00:00:05", 0); // S1 (via SW1)
+    addEntry("switch2", "00:00:00:00:00:0B", 0); // ME (via SW1)
+    addEntry("switch2", "00:00:00:00:00:0D", 0); // S3 (via SW1->SW3)
+    addEntry("switch2", "00:00:00:00:00:11", 4); // S4 (via SW4)
+    addEntry("switch2", "00:00:00:00:00:06", 0); // HU (via SW1)
+    addEntry("switch2", "00:00:00:00:00:02", 0); // US1 (via SW1)
+    addEntry("switch2", "00:00:00:00:00:09", 5); // US2
+    addEntry("switch2", "00:00:00:00:00:10", 4); // US3 (via SW4)
+    addEntry("switch2", "00:00:00:00:00:0C", 0); // US4 (via SW1->SW3)
+    addEntry("switch2", "00:00:00:00:00:04", 0); // CM1 (via SW1)
+    addEntry("switch2", "00:00:00:00:00:01", 0); // TLM (via SW1)
+    addEntry("switch2", "00:00:00:00:00:12", 4); // RS1 (via SW4)
+    addEntry("switch2", "00:00:00:00:00:0E", 0); // RS2 (via SW1->SW3)
+    addEntry("switch2", "00:00:00:00:00:0F", 4); // RC (via SW4)
+
+    // Switch 3
+    addEntry("switch3", "00:00:00:00:00:0B", 0); // ME
+    addEntry("switch3", "00:00:00:00:00:0D", 2); // S3
+    addEntry("switch3", "00:00:00:00:00:05", 1); // S1 (via SW1)
+    addEntry("switch3", "00:00:00:00:00:08", 1); // S2 (via SW1->SW2)
+    addEntry("switch3", "00:00:00:00:00:11", 3); // S4 (via SW4)
+    addEntry("switch3", "00:00:00:00:00:03", 1); // LD1 (via SW1)
+    addEntry("switch3", "00:00:00:00:00:0A", 1); // LD2 (via SW1->SW2)
+    addEntry("switch3", "00:00:00:00:00:07", 1); // CU (via SW1->SW2)
+    addEntry("switch3", "00:00:00:00:00:02", 1); // US1 (via SW1)
+    addEntry("switch3", "00:00:00:00:00:09", 1); // US2 (via SW1->SW2)
+    addEntry("switch3", "00:00:00:00:00:10", 3); // US3 (via SW4)
+    addEntry("switch3", "00:00:00:00:00:0C", 4); // US4
+    addEntry("switch3", "00:00:00:00:00:04", 1); // CM1 (via SW1)
+    addEntry("switch3", "00:00:00:00:00:12", 3); // RS1 (via SW4)
+    addEntry("switch3", "00:00:00:00:00:0E", 5); // RS2
+    addEntry("switch3", "00:00:00:00:00:01", 1); // TLM (via SW1)
+    addEntry("switch3", "00:00:00:00:00:0F", 3); // RC (via SW4)
+    addEntry("switch3", "00:00:00:00:00:06", 1); // HU (via SW1)
+
+    // Switch 4
+    addEntry("switch4", "00:00:00:00:00:11", 2); // S4
+    addEntry("switch4", "00:00:00:00:00:0B", 1); // ME (via SW3)
+    addEntry("switch4", "00:00:00:00:00:0D", 1); // S3 (via SW3)
+    addEntry("switch4", "00:00:00:00:00:05", 0); // S1 (via SW2->SW1)
+    addEntry("switch4", "00:00:00:00:00:08", 0); // S2 (via SW2)
+    addEntry("switch4", "00:00:00:00:00:03", 0); // LD1 (via SW2->SW1)
+    addEntry("switch4", "00:00:00:00:00:0A", 0); // LD2 (via SW2)
+    addEntry("switch4", "00:00:00:00:00:07", 0); // CU (via SW2)
+    addEntry("switch4", "00:00:00:00:00:02", 0); // US1 (via SW2->SW1)
+    addEntry("switch4", "00:00:00:00:00:09", 0); // US2 (via SW2)
+    addEntry("switch4", "00:00:00:00:00:10", 3); // US3
+    addEntry("switch4", "00:00:00:00:00:0C", 1); // US4 (via SW3)
+    addEntry("switch4", "00:00:00:00:00:04", 0); // CM1 (via SW2->SW1)
+    addEntry("switch4", "00:00:00:00:00:12", 5); // RS1
+    addEntry("switch4", "00:00:00:00:00:0E", 1); // RS2 (via SW3)
+    addEntry("switch4", "00:00:00:00:00:01", 0); // TLM (via SW2->SW1)
+    addEntry("switch4", "00:00:00:00:00:0F", 4); // RC
+    addEntry("switch4", "00:00:00:00:00:06", 0); // HU (via SW2->SW1)
+
+    // MULTICAST ENTRIES
+    // Flow 2: ME (SW3) -> S1(SW1), S2(SW2), S3(SW3), S4(SW4)
+    // SW3: In 0 (ME) -> Out 1(SW1/2), 2(S3), 3(SW4)
+    addEntry("switch3", "multicast", 1);
+    addEntry("switch3", "multicast", 2);
+    addEntry("switch3", "multicast", 3);
     
-    // Switch3 MAC table  
-    switchTables["switch3"]["00:00:00:00:00:0B"] = 0; // ME
-    switchTables["switch3"]["00:00:00:00:00:0D"] = 2; // S3
-    switchTables["switch3"]["00:00:00:00:00:05"] = 1; // S1
-    switchTables["switch3"]["00:00:00:00:00:08"] = 1; // S2
-    switchTables["switch3"]["00:00:00:00:00:11"] = 3; // S4
-    switchTables["switch3"]["00:00:00:00:00:03"] = 1; // LD1
-    switchTables["switch3"]["00:00:00:00:00:0A"] = 1; // LD2
-    switchTables["switch3"]["00:00:00:00:00:07"] = 1; // CU
-    switchTables["switch3"]["00:00:00:00:00:02"] = 1; // US1
-    switchTables["switch3"]["00:00:00:00:00:09"] = 1; // US2
-    switchTables["switch3"]["00:00:00:00:00:10"] = 3; // US3
-    switchTables["switch3"]["00:00:00:00:00:0C"] = 4; // US4
-    switchTables["switch3"]["00:00:00:00:00:04"] = 1; // CM1
-    switchTables["switch3"]["00:00:00:00:00:12"] = 3; // RS1
-    switchTables["switch3"]["00:00:00:00:00:0E"] = 5; // RS2
-    switchTables["switch3"]["00:00:00:00:00:01"] = 1; // TLM
-    switchTables["switch3"]["00:00:00:00:00:0F"] = 3; // RC
-    switchTables["switch3"]["00:00:00:00:00:06"] = 1; // HU
+    // SW1: In 3 (SW3) -> Out 0(S1), 2(SW2)
+    addEntry("switch1", "multicast", 0);
+    addEntry("switch1", "multicast", 2);
     
-    // Switch4 MAC table
-    switchTables["switch4"]["00:00:00:00:00:11"] = 2; // S4
-    switchTables["switch4"]["00:00:00:00:00:0B"] = 1; // ME
-    switchTables["switch4"]["00:00:00:00:00:0D"] = 1; // S3
-    switchTables["switch4"]["00:00:00:00:00:05"] = 0; // S1
-    switchTables["switch4"]["00:00:00:00:00:08"] = 0; // S2
-    switchTables["switch4"]["00:00:00:00:00:03"] = 0; // LD1
-    switchTables["switch4"]["00:00:00:00:00:0A"] = 0; // LD2
-    switchTables["switch4"]["00:00:00:00:00:07"] = 0; // CU
-    switchTables["switch4"]["00:00:00:00:00:02"] = 0; // US1
-    switchTables["switch4"]["00:00:00:00:00:09"] = 0; // US2
-    switchTables["switch4"]["00:00:00:00:00:10"] = 3; // US3
-    switchTables["switch4"]["00:00:00:00:00:0C"] = 1; // US4
-    switchTables["switch4"]["00:00:00:00:00:04"] = 0; // CM1
-    switchTables["switch4"]["00:00:00:00:00:12"] = 5; // RS1
-    switchTables["switch4"]["00:00:00:00:00:0E"] = 1; // RS2
-    switchTables["switch4"]["00:00:00:00:00:01"] = 0; // TLM
-    switchTables["switch4"]["00:00:00:00:00:0F"] = 4; // RC
-    switchTables["switch4"]["00:00:00:00:00:06"] = 0; // HU
+    // SW2: In 0 (SW1) -> Out 1(S2), 4(SW4)
+    addEntry("switch2", "multicast", 1);
+    addEntry("switch2", "multicast", 4);
     
+    // SW4: In 1 (SW3) -> Out 2(S4)
+    addEntry("switch4", "multicast", 2);
+    
+    // Flow 6: ME (SW3) -> RS1(SW4), RS2(SW3)
+    // SW3: In 0 (ME) -> Out 3(SW4), 5(RS2)
+    // Nota: "multicast" è già usato. Se i flow ID sono distinti, dovremmo usare flowId o MAC multicast distinti.
+    // Qui assumiamo che "multicast" copra tutti. Questo è un limite della simulazione semplice.
+    // Tuttavia, il TDMASwitch usa il MAC address.
+    // Se entrambi i flow usano "multicast" come dstAddr, ci sarà flooding su tutte le porte configurate.
+    // Soluzione ideale: usare MAC multicast diversi (es. 01:00:5E:00:00:01).
+    // Per ora, aggiungiamo le porte anche per Flow 6.
+    
+    addEntry("switch3", "multicast", 5); // RS2
+    addEntry("switch4", "multicast", 5); // RS1 (da SW3->SW4)
+
     // Applica configurazione
     for (const auto& [switchName, macTable] : switchTables) {
         cModule* sw = getModuleByPath(switchName.c_str());
@@ -724,14 +710,14 @@ void TDMAScheduler::configureSwitches() {
         std::stringstream config;
         bool first = true;
         
-        for (const auto& [mac, port] : macTable) {
+        for (const auto& [mac, ports] : macTable) {
             if (!first) config << ",";
-            config << mac << "->" << port;
+            config << mac << "->" << ports;
             first = false;
         }
         
         sw->par("macTableConfig").setStringValue(config.str());
-        EV << "Configurato " << switchName << " con MAC table" << endl;
+        EV << "Configurato " << switchName << " con MAC table (Multicast enabled)" << endl;
     }
 }
 
