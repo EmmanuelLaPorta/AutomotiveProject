@@ -10,9 +10,8 @@ void TDMASwitch::initialize() {
     numPorts = par("numPorts");
     switchingDelay = par("switchingDelay");
     
-    // Inizializza code per ogni porta
+    // Inizializza stati
     for (int i = 0; i < numPorts; i++) {
-        portQueues[i] = std::queue<cPacket*>();
         portBusy[i] = false;
         maxQueueDepth[i] = 0;
     }
@@ -111,10 +110,8 @@ void TDMASwitch::handleSelfMessage(cMessage *msg) {
         
         portBusy[port] = false;
         
-        // Trasmetti prossimo frame in coda
-        if (!portQueues[port].empty()) {
-            transmitFrame(port);
-        }
+        // Trasmetti prossimo frame in coda (cerca tra le priorità)
+        transmitFrame(port);
     }
 }
 
@@ -126,12 +123,9 @@ void TDMASwitch::processAndForward(TDMAFrame *frame, int arrivalPort) {
        << " -> " << dstMac << " (port " << arrivalPort << ")" << endl;
     
     // --- MAC LEARNING ---
-    // Se non conosciamo il MAC sorgente, lo impariamo associandolo alla porta di arrivo
     if (macTable.find(srcMac) == macTable.end()) {
         macTable[srcMac] = {arrivalPort};
         EV << "  [MAC Learning] Learned " << srcMac << " -> port " << arrivalPort << endl;
-    } else {
-        // Opzionale: aggiorna se cambiato (es. mobilità, ma qui è statico)
     }
 
     // --- FORWARDING ---
@@ -139,36 +133,34 @@ void TDMASwitch::processAndForward(TDMAFrame *frame, int arrivalPort) {
     
     auto it = macTable.find(dstMac);
     if (it != macTable.end()) {
-        // Destinazione nota (Unicast o Multicast)
         destPorts = it->second;
-        EV << "  -> forwarding to " << destPorts.size() << " ports" << endl;
     } else {
-        // Destinazione sconosciuta: FLOODING (tranne porta arrivo)
-        EV_WARN << "MAC " << dstMac << " unknown -> FLOODING" << endl;
+        // Flooding
         for (int i = 0; i < numPorts; i++) {
-            if (i != arrivalPort) {
-                destPorts.push_back(i);
-            }
+            if (i != arrivalPort) destPorts.push_back(i);
         }
     }
     
-    // Invia su tutte le porte identificate
+    int priority = getPriority(frame);
+
     for (int destPort : destPorts) {
-        // Previeni loop (non rispedire indietro)
         if (destPort == arrivalPort) continue;
         
-        // Duplica frame per ogni porta (tranne l'ultima per efficienza, ma qui duplichiamo sempre per sicurezza)
         TDMAFrame *copy = frame->dup();
         
-        // Accoda
-        portQueues[destPort].push(copy);
+        // Accoda nella coda di priorità corretta
+        portQueues[destPort][priority].push(copy);
         
-        // Stats
-        int qSize = portQueues[destPort].size();
-        if (qSize > maxQueueDepth[destPort]) {
-            maxQueueDepth[destPort] = qSize;
+        // Calcola dimensione totale coda per stats
+        int totalQSize = 0;
+        for(auto const& [prio, q] : portQueues[destPort]) {
+            totalQSize += q.size();
         }
-        emit(registerSignal("queueLength"), qSize);
+        
+        if (totalQSize > maxQueueDepth[destPort]) {
+            maxQueueDepth[destPort] = totalQSize;
+        }
+        emit(registerSignal("queueLength"), totalQSize);
         
         // Trasmetti se libero
         if (!portBusy[destPort]) {
@@ -176,32 +168,59 @@ void TDMASwitch::processAndForward(TDMAFrame *frame, int arrivalPort) {
         }
     }
     
-    // Il frame originale non serve più (abbiamo inviato copie o scartato)
     delete frame;
 }
 
 void TDMASwitch::transmitFrame(int port) {
-    if (portQueues[port].empty()) return;
+    if (portBusy[port]) return;
+
+    // Cerca la prima coda non vuota partendo da priorità 0 (Highest)
+    for (int prio = 0; prio <= 7; prio++) {
+        if (!portQueues[port][prio].empty()) {
+            cPacket *frame = portQueues[port][prio].front();
+            portQueues[port][prio].pop();
+            
+            portBusy[port] = true;
+            
+            // Calcola tempo di trasmissione
+            uint64_t bits = frame->getBitLength();
+            simtime_t txTime = SimTime((double)bits / tdma::DATARATE, SIMTIME_S);
+            
+            EV_DEBUG << "Transmitting Prio " << prio << " on port " << port 
+                     << " (" << bits << " bits, " << txTime << ")" << endl;
+            
+            send(frame, "port$o", port);
+            
+            cMessage *txComplete = new cMessage("TxComplete");
+            txComplete->setKind(port);
+            scheduleAt(simTime() + txTime, txComplete);
+            
+            return; // Trovato e trasmesso
+        }
+    }
+}
+
+int TDMASwitch::getPriority(TDMAFrame *frame) {
+    std::string fid = frame->getFlowId();
     
-    cPacket *frame = portQueues[port].front();
-    portQueues[port].pop();
+    // Priority 0 (Highest) - Audio / Safety Critical
+    if (fid.find("flow2") != std::string::npos) return 0; // Audio
+    if (fid.find("flow7") != std::string::npos) return 1; // Telematics
     
-    portBusy[port] = true;
+    // Priority 2 - Sensors
+    if (fid.find("flow3") != std::string::npos) return 2; // Sensors
     
-    // Calcola tempo di trasmissione
-    uint64_t bits = frame->getBitLength();
-    simtime_t txTime = SimTime((double)bits / tdma::DATARATE, SIMTIME_S);
+    // Priority 3 - Control
+    if (fid.find("flow4") != std::string::npos) return 3; // Control
     
-    EV_DEBUG << "Transmitting on port " << port 
-             << " (" << bits << " bits, " << txTime << ")" << endl;
+    // Priority 4 - Video RSE (Multicast)
+    if (fid.find("flow6") != std::string::npos) return 4;
     
-    // Invia frame
-    send(frame, "port$o", port);
+    // Priority 5 - Video Bulk (Cameras)
+    if (fid.find("flow5") != std::string::npos) return 5;
+    if (fid.find("flow8") != std::string::npos) return 5;
     
-    // Schedula fine trasmissione
-    cMessage *txComplete = new cMessage("TxComplete");
-    txComplete->setKind(port);
-    scheduleAt(simTime() + txTime, txComplete);
+    return 7; // Lowest
 }
 
 void TDMASwitch::finish() {

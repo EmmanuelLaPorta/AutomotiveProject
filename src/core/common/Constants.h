@@ -1,41 +1,34 @@
 // src/core/common/Constants.h
-#ifndef CONSTANTS_H
-#define CONSTANTS_H
+#ifndef TDMA_CONSTANTS_H
+#define TDMA_CONSTANTS_H
 
 #include <omnetpp.h>
 
-using namespace omnetpp;
-
 namespace tdma {
+    // Priority Levels
+    const int PRIO_CRITICAL_SAFETY = 0;
+    const int PRIO_CONTROL = 3;
+    const int PRIO_INFOTAINMENT = 6;
+    const int PRIO_BEST_EFFORT = 7;
 
-// Network parameters
-const uint64_t DATARATE = 1000000000; // 1 Gbps
-const int MTU_BYTES = 1500;
-const int ETHERNET_OVERHEAD = 38; // Header + IFG + CRC
+    // Network Constants
+    const int MTU_BYTES = 1500;
+    const int ETHERNET_OVERHEAD = 38; // Preamble + SFD + Header + FCS + IFG
+    const double DATARATE = 1e9; // 1 Gbps
 
-// Time constants as inline functions to avoid global initialization
-inline SimTime getSwitchDelay() { return SimTime(5, SIMTIME_US); }
-inline SimTime getPropagationDelay() { return SimTime(10, SIMTIME_NS); }
-inline SimTime getGuardTime() { return SimTime(1, SIMTIME_US); }
-inline SimTime getIfgTime() { return SimTime(96, SIMTIME_NS); }
-inline SimTime getHyperperiod() { return SimTime(100, SIMTIME_MS); }
+    // Variabili globali gestite (usiamo inline per poterle definire nell'header)
+    inline double GLOBAL_GUARD_TIME = 1e-6; // Default 1us
+    inline double SWITCH_DELAY = 5e-6;      // Default 5us
+    inline double PROPAGATION_DELAY = 0.1e-6; // Default molto basso (cavo corto)
 
-// For backward compatibility with direct constant usage
-#define SWITCH_DELAY getSwitchDelay()
-#define PROPAGATION_DELAY getPropagationDelay()
-#define GUARD_TIME getGuardTime()
-#define IFG_TIME getIfgTime()
-#define HYPERPERIOD getHyperperiod()
-
-// Flow priorities (lower = higher priority)
-enum FlowPriority {
-    PRIO_CRITICAL_SAFETY = 1,  // LiDAR
-    PRIO_CONTROL = 2,          // Control messages
-    PRIO_REALTIME = 3,         // Video streaming
-    PRIO_INFOTAINMENT = 4,     // Audio, entertainment
-    PRIO_BEST_EFFORT = 5       // Parking sensors
-};
-
+    // Setters & Getters
+    inline void setGuardTime(double time) { GLOBAL_GUARD_TIME = time; }
+    inline double getGuardTime() { return GLOBAL_GUARD_TIME; } // <--- RISOLVE ERRORE NAMESPACE
+    
+    inline double getSwitchDelay() { return SWITCH_DELAY; }
+    inline double getPropagationDelay() { return PROPAGATION_DELAY; }
+    
+    inline simtime_t getIfgTime() { return omnetpp::SimTime(96.0 / DATARATE); } // Inter-frame gap (96 bits)
 }
 
 #endif

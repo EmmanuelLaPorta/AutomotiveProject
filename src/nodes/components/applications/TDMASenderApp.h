@@ -28,8 +28,12 @@ protected:
     virtual void finish() override;
     
 
+    int currentFragment;
+    cMessage *fragmentTimer;
+
 private:
     void transmitBurst();
+    void sendFragment();
     void scheduleNextSlot();
 };
 

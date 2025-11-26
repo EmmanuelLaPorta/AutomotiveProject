@@ -22,8 +22,8 @@ public:
         int priority;
         std::vector<std::string> path;
         simtime_t txTime;
-		bool isFragmented = false;
-		int fragmentCount = 1;
+        bool isFragmented = false;
+        int fragmentCount = 1;
     };
     
     enum SlotType {
@@ -46,6 +46,7 @@ protected:
 private:
     simtime_t hyperperiod;
     double datarate;
+    double guardTime; // <--- QUESTA ERA LA VARIABILE MANCANTE
     
     std::vector<Flow> flows;
     std::vector<Slot> schedule;
@@ -56,9 +57,8 @@ private:
     void configureSenders();
     void configureSwitches();
     simtime_t calculateTxTime(int payloadBytes);
-    simtime_t findNextAvailableSlot(const std::string& node, simtime_t preferredTime, simtime_t duration);
-	void printScheduleDebug();
-	std::vector<std::string> getPathTo(const std::string& src, const std::string& dst);
+    void printScheduleDebug();
+    std::vector<std::string> getPathTo(const std::string& src, const std::string& dst);
 };
 
 #endif

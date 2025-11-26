@@ -1,9 +1,12 @@
 // src/core/scheduler/TDMAScheduler.ned
 package tdma.core.scheduler;
 
-simple TDMAScheduler {
+simple TDMAScheduler
+{
     parameters:
-        @display("i=block/control");
-        double hyperperiod @unit(s) = default(100ms);
-        double datarate @unit(bps) = default(1Gbps);
+        double hyperperiod @unit(s);
+        double datarate @unit(bps);
+        double guardTime @unit(s) = default(1us); // <--- QUESTA MANCAVA
+        
+        @display("i=block/cogwheel");
 }

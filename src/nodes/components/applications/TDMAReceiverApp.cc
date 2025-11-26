@@ -60,54 +60,29 @@ void TDMAReceiverApp::handleMessage(cMessage *msg) {
     delayVectors[frameFlowId]->record(delay);
     delayVectorTotal->record(delay);
 
-    // Calcola jitter (solo se non primo pacchetto del flow)
-    if (lastPacketTimePerFlow[frameFlowId] >= 0) {
-        // Jitter = |Delay_curr - Delay_prev|
-        // Nota: lastPacketTimePerFlow memorizza il tempo di ARRIVO precedente
-        // Ma per il jitter ci serve il DELAY precedente.
-        // Ottimizzazione: memorizziamo il delay precedente in una mappa o usiamo lastPacketTime per calcolarlo?
-        // Meglio memorizzare lastDelayPerFlow.
-        
-        // (Aggiungere lastDelayPerFlow in header sarebbe meglio, ma qui usiamo una statica o map locale se non vogliamo toccare header)
-        // Per semplicità, assumiamo che lastPacketTimePerFlow sia usato per inter-arrival, ma qui cambiamo logica.
-        
-        // Recupera delay precedente (salvato in una map statica o membro aggiunto)
-        // Dato che non posso modificare header facilmente ora, uso una map statica "hacky" o ricalcolo se possibile.
-        // MA ASPETTA: Posso aggiungere membri in initialize/header? 
-        // L'utente ha detto "utilizza solamente i file che hai a disposizione".
-        // Modificherò la logica usando una map statica all'interno della funzione o membro se già esiste.
-        
-        // Controllo header... non c'è lastDelay.
-        // Uso lastPacketTimePerFlow per calcolare InterArrival, ma Jitter RFC è variazione delay.
-        
-        // Jitter = |(R_curr - S_curr) - (R_prev - S_prev)| = |Delay_curr - Delay_prev|
-        
-        double prevDelay = 0;
-        if (lastDelayMap.find(frameFlowId) != lastDelayMap.end()) {
-             prevDelay = lastDelayMap[frameFlowId];
-             simtime_t jitter = fabs((delay - prevDelay).dbl());
-             
-             if (jitter > maxJitterPerFlow[frameFlowId]) {
-                maxJitterPerFlow[frameFlowId] = jitter;
-             }
-             jitterVectors[frameFlowId]->record(jitter);
-             EV_DEBUG << frameFlowId << " delay=" << delay << ", jitter=" << jitter << endl;
-        }
-        lastDelayMap[frameFlowId] = delay.dbl();
+    // Calcola jitter (Packet Delay Variation)
+    // Jitter = |Delay_curr - Delay_prev|
+    if (lastDelayMap.find(frameFlowId) != lastDelayMap.end()) {
+         double prevDelay = lastDelayMap[frameFlowId];
+         simtime_t jitter = fabs((delay.dbl() - prevDelay));
+         
+         if (jitter > maxJitterPerFlow[frameFlowId]) {
+            maxJitterPerFlow[frameFlowId] = jitter;
+         }
+         jitterVectors[frameFlowId]->record(jitter);
+         EV_DEBUG << frameFlowId << " delay=" << delay << ", jitter=" << jitter << endl;
     }
+    lastDelayMap[frameFlowId] = delay.dbl();
 
-    // Calcola jitter totale (se non primo pacchetto assoluto)
+    // Calcola jitter totale (basato su inter-arrival, opzionale)
     if (lastPacketTimeTotal >= 0) {
         simtime_t interArrival = simTime() - lastPacketTimeTotal;
-        simtime_t expectedInterval = frame->getTxTime();
+        simtime_t expectedInterval = frame->getTxTime(); // Approx
         simtime_t jitter = fabs((interArrival - expectedInterval).dbl());
 
-        // Aggiorna max jitter totale
         if (jitter > maxJitterTotal) {
             maxJitterTotal = jitter;
         }
-
-        // Registra jitter totale
         jitterVectorTotal->record(jitter);
     }
     

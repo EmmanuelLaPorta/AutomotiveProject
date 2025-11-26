@@ -9,7 +9,6 @@
 
 using namespace omnetpp;
 
-
 class TDMAFrame;
 
 class TDMASwitch : public cSimpleModule {
@@ -19,7 +18,11 @@ protected:
     
     // MAC Table: MAC Address -> Vector of Output Ports (for Multicast)
     std::map<std::string, std::vector<int>> macTable;
-    std::map<int, std::queue<cPacket*>> portQueues;
+    
+    // Priority Queuing: Port -> Priority -> Queue
+    // Priority 0 = Highest, 7 = Lowest
+    std::map<int, std::map<int, std::queue<cPacket*>>> portQueues;
+    
     std::map<int, bool> portBusy;
     std::map<int, int> maxQueueDepth;
     
@@ -33,6 +36,7 @@ private:
     void handleSelfMessage(cMessage *msg);
 	void processAndForward(TDMAFrame *frame, int arrivalPort);
     void transmitFrame(int port);
+    int getPriority(TDMAFrame *frame);
 };
 
 #endif
