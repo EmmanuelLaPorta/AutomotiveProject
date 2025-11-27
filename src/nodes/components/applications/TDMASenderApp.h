@@ -16,7 +16,6 @@ protected:
     int burstSize;              // Frammenti totali (per header)
     int numDestinations;        // Destinazioni multicast
     simtime_t txDuration;
-    bool isFragmented;
     
     std::vector<simtime_t> txSlots;  // Offset slot da scheduler
     int currentSlot;
@@ -24,14 +23,12 @@ protected:
     int currentFragment;        // Contatore frammenti inviati
     simtime_t hyperperiod;
     int cycleCount;
-    cMessage *fragmentTimer;
     
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void finish() override;
 
 private:
-    void transmitBurst();
     void sendFragment();
     void scheduleNextSlot();
 };

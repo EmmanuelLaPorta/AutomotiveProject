@@ -13,25 +13,24 @@ public:
     // Definizione di un flusso di traffico
     struct Flow {
         std::string id;           // ID univoco (es "flow1_LD1")
-        std::string src;          // Nodo sorgente
-        std::string dst;          // Destinazione/i (virgola-separated per multicast)
+        std::string src;          // Nome nodo sorgente (es "LD1")
+        std::string dst;          // Nome nodi destinazione (comma-separated es "HU" o "S1,S2")
         std::string srcMac;
-        std::string dstMac;       // "multicast" per flussi multicast
+        std::string dstMac;       
         simtime_t period;         // Periodo di trasmissione
-        int payload;              // Payload totale in byte
+        int payload;              // Payload del frammento in byte
         int priority;             // Priorita EDF (0=max)
-        std::vector<std::string> path;  // Path fisico attraverso switch
-        simtime_t txTime;         // Tempo TX calcolato (payload + overhead)
+        std::vector<std::string> path;  
+        simtime_t txTime;         // Tempo TX calcolato
         bool isFragmented = false;
-        int fragmentCount = 1;    // Numero frammenti se payload > MTU
+        int fragmentCount = 1;    // Numero frammenti
     };
     
     enum SlotType {
-        SLOT_SENDER,    // Slot assegnato a nodo sorgente
-        SLOT_SWITCH     // Slot assegnato a switch intermedio
+        SLOT_SENDER,    
+        SLOT_SWITCH     
     };
     
-    // Entry nella tabella di scheduling
     struct Slot {
         std::string flowId;
         std::string node;         // Nodo che trasmette in questo slot
@@ -52,13 +51,12 @@ private:
     std::vector<Flow> flows;
     std::vector<Slot> schedule;
     
-    void defineFlows();              // Definisce gli 8 flussi da specifica
+    void discoverFlowsFromNetwork(); // Legge i parametri .ini dai moduli
     void generateOptimizedSchedule();// Algoritmo EDF pipelined
-    bool verifyNoCollisions();
     void configureSenders();         // Inietta slot nei TDMASenderApp
     void configureSwitches();        // Configura MAC table degli switch
+    
     simtime_t calculateTxTime(int payloadBytes);
-    void printScheduleDebug();
     std::vector<std::string> getPathTo(const std::string& src, const std::string& dst);
 };
 
