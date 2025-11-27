@@ -11,6 +11,7 @@ simple TDMASenderApp {
         int numDestinations = default(1) @mutable;       // Per multicast
         string tdmaSlots = default("") @mutable;         // CSV offset in secondi
         double txDuration @unit(s) = default(0s) @mutable;
+        double hyperperiod @unit(s) = default(0.2s) @mutable;
 
     gates:
         output out;

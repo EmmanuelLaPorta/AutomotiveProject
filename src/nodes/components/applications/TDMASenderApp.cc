@@ -28,6 +28,8 @@ void TDMASenderApp::initialize() {
     currentSlot = 0;
     packetsSent = 0;
     currentFragment = 0;
+    hyperperiod = par("hyperperiod");
+    cycleCount = 0;
     
     EV << "=== TDMASenderApp " << flowId << " ===" << endl;
     EV << "Slots: " << txSlots.size() << ", Fragments: " << burstSize << endl;
@@ -89,14 +91,20 @@ void TDMASenderApp::sendFragment() {
     currentFragment++;
     currentSlot++;
     
-    if (currentSlot < txSlots.size()) {
-        scheduleNextSlot();
-    }
+    scheduleNextSlot();
 }
 
 void TDMASenderApp::scheduleNextSlot() {
+    // Se abbiamo esaurito gli slot di questo ciclo, passa al prossimo
+    if (currentSlot >= txSlots.size()) {
+        currentSlot = 0;
+        cycleCount++;
+        currentFragment = 0;  // Reset frammenti per nuovo ciclo
+    }
+
     while (currentSlot < txSlots.size()) {
-        simtime_t nextTime = txSlots[currentSlot];
+        // Offset originale + shift per il ciclo corrente
+        simtime_t nextTime = txSlots[currentSlot] + (hyperperiod * cycleCount);
         
         if (nextTime >= simTime()) {
             cMessage *slotMsg = new cMessage("TxSlot");
@@ -104,10 +112,15 @@ void TDMASenderApp::scheduleNextSlot() {
             return;
         }
         
-        // Slot nel passato (non dovrebbe accadere)
-        EV_WARN << flowId << " skipped slot " << currentSlot << " @ " << nextTime << endl;
+        // Slot nel passato, salta
+        EV_WARN << flowId << " skipped slot " << currentSlot
+                << " @ " << nextTime << endl;
         currentSlot++;
     }
+
+    // Se siamo qui, tutti gli slot del ciclo erano nel passato
+    // Riprova col prossimo ciclo
+    scheduleNextSlot();
 }
 
 void TDMASenderApp::finish() {

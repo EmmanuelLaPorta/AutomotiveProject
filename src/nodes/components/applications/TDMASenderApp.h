@@ -22,6 +22,8 @@ protected:
     int currentSlot;
     long packetsSent;
     int currentFragment;        // Contatore frammenti inviati
+    simtime_t hyperperiod;
+    int cycleCount;
     cMessage *fragmentTimer;
     
     virtual void initialize() override;

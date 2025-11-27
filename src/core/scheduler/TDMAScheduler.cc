@@ -55,7 +55,7 @@ void TDMAScheduler::initialize() {
     std::cout << "TDMA SCHEDULER: Inizio calcolo tabella..." << std::endl;
     std::cout << "------------------------------------------------" << std::endl;
 
-    EV << "=== TDMA Scheduler Initialization (Pipelined EDF) ===" << endl;
+
     
     flows.clear();
     schedule.clear();
@@ -66,8 +66,10 @@ void TDMAScheduler::initialize() {
     configureSenders();
     configureSwitches();
     
+    std::cout << "------------------------------------------------" << std::endl;
     std::cout << "TDMA SCHEDULER: Calcolo completato" << std::endl;
-    EV << "=== TDMA Schedule completato ===" << endl;
+    std::cout << "------------------------------------------------" << std::endl;
+
 }
 
 // Definizione degli 8 flussi da specifica progetto
@@ -297,6 +299,8 @@ void TDMAScheduler::configureSenders() {
             } else {
                 sender->par("dstAddr").setStringValue(flow.dstMac);
             }
+
+            sender->par("hyperperiod").setDoubleValue(hyperperiod.dbl());
         }
     }
 }
