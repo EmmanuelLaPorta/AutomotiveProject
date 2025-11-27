@@ -1,4 +1,4 @@
-// src/nodes/components/applications/TDMAReceiverApp.cc
+// Implementazione receiver
 #include "TDMAReceiverApp.h"
 #include "../../../messages/TDMAFrame_m.h"
 
@@ -11,7 +11,6 @@ void TDMAReceiverApp::initialize() {
     maxJitterTotal = 0;
     lastPacketTimeTotal = -1;
 
-    // Crea vector aggregati TOTAL
     delayVectorTotal = new cOutVector("e2eDelay_TOTAL");
     jitterVectorTotal = new cOutVector("jitter_TOTAL");
     
@@ -21,7 +20,7 @@ void TDMAReceiverApp::initialize() {
 void TDMAReceiverApp::handleMessage(cMessage *msg) {
     TDMAFrame *frame = check_and_cast<TDMAFrame*>(msg);
     
-    // Filtra per flow ID se specificato (receiver dedicati)
+    // Filtra per flow ID se receiver dedicato
     if (!flowId.empty() && strcmp(frame->getFlowId(), flowId.c_str()) != 0) {
         EV_DEBUG << "Receiver scarta frame flowId=" << frame->getFlowId()
                  << " (atteso: " << flowId << ")" << endl;
@@ -31,37 +30,30 @@ void TDMAReceiverApp::handleMessage(cMessage *msg) {
     
     std::string frameFlowId = frame->getFlowId();
 
-    // Registrazione dinamica per questo flow (solo prima volta)
+    // Registrazione dinamica vector per nuovo flow
     if (delayVectors.find(frameFlowId) == delayVectors.end()) {
         delayVectors[frameFlowId] = new cOutVector(("e2eDelay_" + frameFlowId).c_str());
         jitterVectors[frameFlowId] = new cOutVector(("jitter_" + frameFlowId).c_str());
-
         maxDelayPerFlow[frameFlowId] = 0;
         maxJitterPerFlow[frameFlowId] = 0;
         lastPacketTimePerFlow[frameFlowId] = -1;
-
         EV << "Registrati vector per flow: " << frameFlowId << endl;
     }
 
-    // Calcola delay end-to-end
+    // Calcolo E2E delay
     simtime_t delay = simTime() - frame->getGenTime();
     
-    // Aggiorna max delay per questo flow
     if (delay > maxDelayPerFlow[frameFlowId]) {
         maxDelayPerFlow[frameFlowId] = delay;
     }
-    
-    // Aggiorna max delay totale
     if (delay > maxDelayTotal) {
         maxDelayTotal = delay;
     }
 
-    // Registra delay nei vector
     delayVectors[frameFlowId]->record(delay);
     delayVectorTotal->record(delay);
 
-    // Calcola jitter (Packet Delay Variation)
-    // Jitter = |Delay_curr - Delay_prev|
+    // Calcolo jitter PDV: |delay_curr - delay_prev|
     if (lastDelayMap.find(frameFlowId) != lastDelayMap.end()) {
          double prevDelay = lastDelayMap[frameFlowId];
          simtime_t jitter = fabs((delay.dbl() - prevDelay));
@@ -74,10 +66,10 @@ void TDMAReceiverApp::handleMessage(cMessage *msg) {
     }
     lastDelayMap[frameFlowId] = delay.dbl();
 
-    // Calcola jitter totale (basato su inter-arrival, opzionale)
+    // Jitter totale basato su inter-arrival time
     if (lastPacketTimeTotal >= 0) {
         simtime_t interArrival = simTime() - lastPacketTimeTotal;
-        simtime_t expectedInterval = frame->getTxTime(); // Approx
+        simtime_t expectedInterval = frame->getTxTime();
         simtime_t jitter = fabs((interArrival - expectedInterval).dbl());
 
         if (jitter > maxJitterTotal) {
@@ -93,32 +85,25 @@ void TDMAReceiverApp::handleMessage(cMessage *msg) {
 }
 
 void TDMAReceiverApp::finish() {
-    // Statistiche per-flow (SOLO MAX)
+    // Scalari per-flow
     for (const auto& entry : maxDelayPerFlow) {
-        const std::string& flowId = entry.first;
-        
-        recordScalar(("maxDelay_" + flowId).c_str(), maxDelayPerFlow[flowId]);
-        recordScalar(("maxJitter_" + flowId).c_str(), maxJitterPerFlow[flowId]);
-        
-        EV << "Flow " << flowId << ": maxDelay=" << maxDelayPerFlow[flowId]
-           << ", maxJitter=" << maxJitterPerFlow[flowId] << endl;
+        const std::string& fid = entry.first;
+        recordScalar(("maxDelay_" + fid).c_str(), maxDelayPerFlow[fid]);
+        recordScalar(("maxJitter_" + fid).c_str(), maxJitterPerFlow[fid]);
+        EV << "Flow " << fid << ": maxDelay=" << maxDelayPerFlow[fid]
+           << ", maxJitter=" << maxJitterPerFlow[fid] << endl;
     }
 
-    // Statistiche aggregate (TOTAL)
+    // Scalari aggregati
     recordScalar("maxDelay_TOTAL", maxDelayTotal);
     recordScalar("maxJitter_TOTAL", maxJitterTotal);
 
-    EV << "=== " << getFullPath() << " TOTAL Statistics ===" << endl;
-    EV << "Max Delay: " << maxDelayTotal << endl;
-    EV << "Max Jitter: " << maxJitterTotal << endl;
+    EV << "=== " << getFullPath() << " TOTAL ===" << endl;
+    EV << "Max Delay: " << maxDelayTotal << ", Max Jitter: " << maxJitterTotal << endl;
 
-    // Cleanup vectors
-    for (auto& entry : delayVectors) {
-        delete entry.second;
-    }
-    for (auto& entry : jitterVectors) {
-        delete entry.second;
-    }
+    // Cleanup
+    for (auto& entry : delayVectors) delete entry.second;
+    for (auto& entry : jitterVectors) delete entry.second;
     delete delayVectorTotal;
     delete jitterVectorTotal;
 }

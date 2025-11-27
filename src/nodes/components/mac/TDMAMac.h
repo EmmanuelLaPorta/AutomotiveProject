@@ -1,4 +1,3 @@
-// src/nodes/components/mac/TDMAMac.h
 #ifndef TDMA_MAC_H
 #define TDMA_MAC_H
 

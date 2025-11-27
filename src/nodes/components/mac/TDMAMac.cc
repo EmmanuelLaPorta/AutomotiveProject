@@ -1,4 +1,4 @@
-// src/nodes/components/mac/TDMAMac.cc
+// Implementazione MAC
 #include "TDMAMac.h"
 #include "../../../messages/TDMAFrame_m.h"
 #include "../../../core/common/Constants.h"
@@ -25,18 +25,18 @@ void TDMAMac::initialize() {
 void TDMAMac::handleMessage(cMessage *msg) {
     if (msg->isSelfMessage()) {
         handleSelfMessage(msg);
-    } else if (msg->getArrivalGate()->isName("upperIn")) {  // Cambiato da == gate("upperIn")
+    } else if (msg->getArrivalGate()->isName("upperIn")) {
         handleUpperMessage(check_and_cast<cPacket*>(msg));
     } else {
         handleLowerMessage(check_and_cast<cPacket*>(msg));
     }
 }
+
 void TDMAMac::handleSelfMessage(cMessage *msg) {
     if (strcmp(msg->getName(), "TxComplete") == 0) {
         delete msg;
         txState = TX_IDLE;
         
-        // Check for more packets
         if (!txQueue.isEmpty()) {
             startTransmission();
         }
@@ -45,13 +45,11 @@ void TDMAMac::handleSelfMessage(cMessage *msg) {
         delete msg;
         rxState = RX_IDLE;
         
-        // Forward to upper layer
         if (currentRxFrame) {
             send(currentRxFrame, "upperOut");
             currentRxFrame = nullptr;
         }
         
-        // Process next in queue
         if (!rxQueue.isEmpty()) {
             processNextRx();
         }
@@ -59,7 +57,6 @@ void TDMAMac::handleSelfMessage(cMessage *msg) {
 }
 
 void TDMAMac::handleUpperMessage(cPacket *pkt) {
-    // Add to TX queue
     txQueue.insert(pkt);
     
     int qSize = txQueue.getLength();
@@ -69,7 +66,6 @@ void TDMAMac::handleUpperMessage(cPacket *pkt) {
     
     emit(registerSignal("txQueueLength"), qSize);
     
-    // Start transmission if idle
     if (txState == TX_IDLE) {
         startTransmission();
     }
@@ -77,7 +73,6 @@ void TDMAMac::handleUpperMessage(cPacket *pkt) {
 
 void TDMAMac::handleLowerMessage(cPacket *pkt) {
     if (rxState != RX_IDLE) {
-        // Queue if busy
         rxQueue.insert(pkt);
         
         int qSize = rxQueue.getLength();
@@ -87,11 +82,9 @@ void TDMAMac::handleLowerMessage(cPacket *pkt) {
         
         emit(registerSignal("rxQueueLength"), qSize);
     } else {
-        // Process immediately
         currentRxFrame = pkt;
         rxState = RX_BUSY;
         
-        // Simulate processing time
         simtime_t procTime = SimTime(pkt->getBitLength() / datarate, SIMTIME_S);
         scheduleAt(simTime() + procTime, new cMessage("RxComplete"));
     }
@@ -106,13 +99,9 @@ void TDMAMac::startTransmission() {
     cPacket *pkt = check_and_cast<cPacket*>(txQueue.pop());
     txState = TX_BUSY;
     
-    // Calculate transmission time
     simtime_t txTime = SimTime(pkt->getBitLength() / datarate, SIMTIME_S);
     
-    // Send to physical layer
     send(pkt, "lowerOut");
-    
-    // Schedule completion
     scheduleAt(simTime() + txTime, new cMessage("TxComplete"));
     
     emit(registerSignal("txQueueLength"), txQueue.getLength());
@@ -134,6 +123,6 @@ void TDMAMac::finish() {
     recordScalar("maxTxQueueSize", maxTxQueueSize);
     recordScalar("maxRxQueueSize", maxRxQueueSize);
     
-    EV << "MAC " << macAddress << " - Max TX Queue: " << maxTxQueueSize 
-       << ", Max RX Queue: " << maxRxQueueSize << endl;
+    EV << "MAC " << macAddress << " - MaxTxQ: " << maxTxQueueSize 
+       << ", MaxRxQ: " << maxRxQueueSize << endl;
 }

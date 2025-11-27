@@ -1,4 +1,4 @@
-// src/nodes/components/applications/TDMASenderApp.cc
+// Implementazione sender
 #include "TDMASenderApp.h"
 #include "../../../messages/TDMAFrame_m.h"
 #include "../../../core/common/Constants.h"
@@ -11,12 +11,10 @@ void TDMASenderApp::initialize() {
     srcAddr = par("srcAddr").stringValue();
     dstAddr = par("dstAddr").stringValue();
     payloadSize = par("payloadSize");
-    
-    // burstSize viene letto solo per marcare il TotalFragments nell'header,
-    // non per ciclare l'invio. Lo scheduling gestisce i singoli slot.
     burstSize = par("burstSize"); 
     numDestinations = par("numDestinations");
     
+    // Parse slot list dal parametro
     std::string slotsStr = par("tdmaSlots").stringValue();
     if (!slotsStr.empty()) {
         std::stringstream ss(slotsStr);
@@ -29,10 +27,10 @@ void TDMASenderApp::initialize() {
     txDuration = par("txDuration");
     currentSlot = 0;
     packetsSent = 0;
-    currentFragment = 0; // Indice progressivo assoluto
+    currentFragment = 0;
     
-    EV << "=== TDMASenderApp " << flowId << " initialized ===" << endl;
-    EV << "Slots: " << txSlots.size() << ", Total Fragments info: " << burstSize << endl;
+    EV << "=== TDMASenderApp " << flowId << " ===" << endl;
+    EV << "Slots: " << txSlots.size() << ", Fragments: " << burstSize << endl;
     
     if (!txSlots.empty()) {
         scheduleNextSlot();
@@ -49,21 +47,25 @@ void TDMASenderApp::handleMessage(cMessage *msg) {
 void TDMASenderApp::sendFragment() {
     std::string currentDst = dstAddr;
     
-    // Logica indirizzamento Multicast Round-Robin
+    // Round-robin per multicast
     if (dstAddr == "multicast") {
         if (flowId.find("flow2") != std::string::npos) {
-            // Audio: 4 speakers
-            std::vector<std::string> speakers = {"00:00:00:00:00:05", "00:00:00:00:00:08", "00:00:00:00:00:0D", "00:00:00:00:00:11"};
+            // Audio: S1, S2, S3, S4
+            std::vector<std::string> speakers = {
+                "00:00:00:00:00:05", "00:00:00:00:00:08", 
+                "00:00:00:00:00:0D", "00:00:00:00:00:11"
+            };
             currentDst = speakers[currentFragment % 4]; 
         } else if (flowId.find("flow6") != std::string::npos) {
-            // Video: 2 screens
-            std::vector<std::string> screens = {"00:00:00:00:00:12", "00:00:00:00:00:0E"};
+            // Video: RS1, RS2
+            std::vector<std::string> screens = {
+                "00:00:00:00:00:12", "00:00:00:00:00:0E"
+            };
             currentDst = screens[currentFragment % 2];
         }
     }
 
-    // Calcolo flag Last Fragment
-    // Se burstSize > 1, è l'ultimo frammento di un gruppo
+    // Flag ultimo frammento del burst corrente
     bool isLast = ((currentFragment + 1) % burstSize == 0); 
 
     TDMAFrame *frame = new TDMAFrame(flowId.c_str());
@@ -81,8 +83,8 @@ void TDMASenderApp::sendFragment() {
     send(frame, "out");
     packetsSent++;
 
-    EV_DEBUG << flowId << " sent fragment " << (currentFragment % burstSize) 
-             << " to " << currentDst << " at " << simTime() << endl;
+    EV_DEBUG << flowId << " frag " << (currentFragment % burstSize) 
+             << " -> " << currentDst << " @ " << simTime() << endl;
 
     currentFragment++;
     currentSlot++;
@@ -102,8 +104,8 @@ void TDMASenderApp::scheduleNextSlot() {
             return;
         }
         
-        // Se arriviamo qui, abbiamo mancato uno slot (non dovrebbe succedere con il nuovo scheduler)
-        EV_WARN << flowId << " skipped past slot " << currentSlot << " at " << nextTime << endl;
+        // Slot nel passato (non dovrebbe accadere)
+        EV_WARN << flowId << " skipped slot " << currentSlot << " @ " << nextTime << endl;
         currentSlot++;
     }
 }

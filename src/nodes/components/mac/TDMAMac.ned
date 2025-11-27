@@ -1,4 +1,3 @@
-// src/nodes/components/mac/TDMAMac.ned
 package tdma.nodes.components.mac;
 
 simple TDMAMac {
@@ -14,8 +13,8 @@ simple TDMAMac {
         @statistic[rxQueueLength](record=vector,stats,max);
 
     gates:
-        input upperIn[];
-        output upperOut;
-        input lowerIn;
-        output lowerOut;
+        input upperIn[];    // Da sender apps
+        output upperOut;    // A receiver app
+        input lowerIn;      // Da link fisico
+        output lowerOut;    // A link fisico
 }

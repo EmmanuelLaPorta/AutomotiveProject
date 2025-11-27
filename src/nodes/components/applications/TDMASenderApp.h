@@ -1,4 +1,3 @@
-// src/nodes/components/applications/TDMASenderApp.h
 #ifndef TDMA_SENDER_APP_H
 #define TDMA_SENDER_APP_H
 
@@ -12,24 +11,22 @@ class TDMASenderApp : public cSimpleModule {
 protected:
     std::string flowId;
     std::string srcAddr;
-    std::string dstAddr;
-    int payloadSize;
-    int burstSize;
-    int numDestinations;
+    std::string dstAddr;        // MAC specifico o "multicast"
+    int payloadSize;            // Byte per frammento
+    int burstSize;              // Frammenti totali (per header)
+    int numDestinations;        // Destinazioni multicast
     simtime_t txDuration;
     bool isFragmented;
     
-    std::vector<simtime_t> txSlots;
+    std::vector<simtime_t> txSlots;  // Offset slot da scheduler
     int currentSlot;
     long packetsSent;
+    int currentFragment;        // Contatore frammenti inviati
+    cMessage *fragmentTimer;
     
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void finish() override;
-    
-
-    int currentFragment;
-    cMessage *fragmentTimer;
 
 private:
     void transmitBurst();

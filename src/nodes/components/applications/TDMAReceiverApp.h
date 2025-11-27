@@ -1,4 +1,3 @@
-// src/nodes/components/applications/TDMAReceiverApp.h
 #ifndef TDMA_RECEIVER_APP_H
 #define TDMA_RECEIVER_APP_H
 
@@ -10,20 +9,20 @@ using namespace omnetpp;
 
 class TDMAReceiverApp : public cSimpleModule {
 protected:
-    std::string flowId;
+    std::string flowId;  // Vuoto = accetta tutti i flow
     
-    // Statistiche per-flow
+    // Statistiche flow
     std::map<std::string, simtime_t> maxDelayPerFlow;
     std::map<std::string, simtime_t> maxJitterPerFlow;
     std::map<std::string, simtime_t> lastPacketTimePerFlow;
-    std::map<std::string, double> lastDelayMap; // Added for Jitter calculation
+    std::map<std::string, double> lastDelayMap; 
 
-    // Statistiche aggregate (TOTAL)
+    // Statistiche aggregate
     simtime_t maxDelayTotal;
     simtime_t maxJitterTotal;
     simtime_t lastPacketTimeTotal;
 
-    // Output vectors per-flow
+    // Output vectors flow
     std::map<std::string, cOutVector*> delayVectors;
     std::map<std::string, cOutVector*> jitterVectors;
     

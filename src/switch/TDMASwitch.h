@@ -1,4 +1,4 @@
-// src/switch/TDMASwitch.h
+
 #ifndef TDMA_SWITCH_H
 #define TDMA_SWITCH_H
 
@@ -16,11 +16,10 @@ protected:
     int numPorts;
     simtime_t switchingDelay;
     
-    // MAC Table: MAC Address -> Vector of Output Ports (for Multicast)
+    // MAC -> lista porte uscita (multicast supportato)
     std::map<std::string, std::vector<int>> macTable;
     
-    // Priority Queuing: Port -> Priority -> Queue
-    // Priority 0 = Highest, 7 = Lowest
+    // Code per porta e priorita: port -> priority -> queue
     std::map<int, std::map<int, std::queue<cPacket*>>> portQueues;
     
     std::map<int, bool> portBusy;
@@ -34,7 +33,7 @@ private:
     void loadMacTable();
     void handleIncomingFrame(cPacket *pkt);
     void handleSelfMessage(cMessage *msg);
-	void processAndForward(TDMAFrame *frame, int arrivalPort);
+    void processAndForward(TDMAFrame *frame, int arrivalPort);
     void transmitFrame(int port);
     int getPriority(TDMAFrame *frame);
 };

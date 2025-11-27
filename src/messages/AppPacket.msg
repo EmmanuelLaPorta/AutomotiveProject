@@ -1,4 +1,4 @@
-// src/messages/AppPacket.msg
+// Pacchetto generico livello applicativo
 packet AppPacket {
     string appName;
     int sequenceNumber;

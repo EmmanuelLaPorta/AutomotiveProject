@@ -1,4 +1,4 @@
-// src/nodes/EndSystem.ned
+// Nodo terminale: combina sender/receiver apps con MAC layer
 package tdma.nodes;
 
 import tdma.nodes.components.applications.TDMASenderApp;
@@ -30,15 +30,12 @@ module EndSystem {
         }
 
     connections allowunconnected:
-        // Senders to MAC
         for i=0..numSenders-1 {
              senderApp[i].out --> mac.upperIn++;
         }
 
-        // MAC to Receivers
         mac.upperOut --> receiverApp[0].in if numReceivers > 0;
 
-        // MAC to Physical
         mac.lowerOut --> ethg$o;
         mac.lowerIn <-- ethg$i;
 }
