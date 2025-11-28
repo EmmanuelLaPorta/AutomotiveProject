@@ -1,10 +1,11 @@
-// Implementazione scheduler
+// Implementazione scheduler con discovery dinamica della topologia
 #include "TDMAScheduler.h"
 #include "../common/Constants.h" 
 #include <algorithm>
 #include <sstream>
 #include <set>
 #include <map>
+#include <queue>
 #include <iostream>
 
 Define_Module(TDMAScheduler);
@@ -54,26 +55,125 @@ void TDMAScheduler::initialize() {
     flows.clear();
     schedule.clear();
     linkTable.clear();
+    adjacency.clear();
+    nodeMacAddress.clear();
+    pathCache.clear();
 
     try { tdma::setGuardTime(guardTime); } catch (...) {}
 
-    std::cout << "TDMA SCHEDULER: Acquisizione dei flussi in corso..." << std::endl;
+    std::cout << "TDMA SCHEDULER: Inizializzazione..." << std::endl;
 
-    // 1. Leggo configurazione dall'ambiente (INI/NED)
+    // 1. Discovery topologia dalla rete NED (una sola volta)
+    discoverTopology();
+    
+    // 2. Leggo configurazione flussi dall'ambiente (INI/NED)
     discoverFlowsFromNetwork();
     
-    // 2. Calcolo tabella
+    // 3. Calcolo tabella di scheduling
     generateOptimizedSchedule();
     
-    // 3. Distribuisco configurazione
+    // 4. Distribuisco configurazione
     configureSenders();
     configureSwitches();
     
     std::cout << "TDMA SCHEDULER: Inizializzazione completata" << std::endl;
 }
 
+void TDMAScheduler::discoverTopology() {
+    cModule *network = getParentModule();
+    
+    std::cout << "TDMA SCHEDULER: Discovery topologia..." << std::endl;
+    
+    // Prima passata: raccogli tutti i nodi e i loro MAC address
+    for (cModule::SubmoduleIterator it(network); !it.end(); ++it) {
+        cModule *node = *it;
+        std::string nodeName = node->getName();
+        
+        // Salta lo scheduler stesso
+        if (nodeName == "tdmaScheduler") continue;
+        
+        // Raccogli MAC address dagli EndSystem
+        if (node->hasPar("macAddress")) {
+            std::string mac = node->par("macAddress").stringValue();
+            if (!mac.empty()) {
+                nodeMacAddress[nodeName] = mac;
+                EV << "Nodo " << nodeName << " MAC: " << mac << endl;
+            }
+        }
+        
+        // Inizializza entry nel grafo
+        adjacency[nodeName] = {};
+    }
+    
+    // Lambda per risalire al modulo di rete (salta submodule interni come "mac")
+    auto getNetworkModule = [network](cModule *mod) -> cModule* {
+        if (!mod) return nullptr;
+        // Risali finche' il parent non e' la rete
+        while (mod->getParentModule() != network && mod->getParentModule() != nullptr) {
+            mod = mod->getParentModule();
+        }
+        return (mod->getParentModule() == network) ? mod : nullptr;
+    };
+    
+    // Seconda passata: scopri le connessioni navigando le gate
+    for (cModule::SubmoduleIterator it(network); !it.end(); ++it) {
+        cModule *node = *it;
+        std::string nodeName = node->getName();
+        
+        if (nodeName == "tdmaScheduler") continue;
+        
+        // Controlla se e' uno switch (ha gate array "port")
+        bool isSwitch = (nodeName.find("switch") != std::string::npos);
+        
+        if (isSwitch) {
+            // Switch: itera sulle porte
+            int numPorts = node->par("numPorts");
+            for (int p = 0; p < numPorts; p++) {
+                cGate *outGate = node->gate("port$o", p);
+                if (outGate && outGate->isConnected()) {
+                    cGate *nextGate = outGate->getNextGate();
+                    if (nextGate) {
+                        // Potrebbe essere un channel, naviga fino al modulo
+                        cGate *destGate = outGate->getPathEndGate();
+                        if (destGate) {
+                            cModule *rawNeighbor = destGate->getOwnerModule();
+                            cModule *neighbor = getNetworkModule(rawNeighbor);
+                            if (neighbor && neighbor != node) {
+                                std::string neighborName = neighbor->getName();
+                                adjacency[nodeName].push_back({neighborName, p});
+                                EV << "Connessione: " << nodeName << "[" << p << "] -> " << neighborName << endl;
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // EndSystem: ha una singola gate "ethg"
+            cGate *outGate = node->gate("ethg$o");
+            if (outGate && outGate->isConnected()) {
+                cGate *destGate = outGate->getPathEndGate();
+                if (destGate) {
+                    cModule *rawNeighbor = destGate->getOwnerModule();
+                    cModule *neighbor = getNetworkModule(rawNeighbor);
+                    if (neighbor && neighbor != node) {
+                        std::string neighborName = neighbor->getName();
+                        adjacency[nodeName].push_back({neighborName, 0});
+                        EV << "Connessione: " << nodeName << " -> " << neighborName << endl;
+                    }
+                }
+            }
+        }
+    }
+    
+    std::cout << "TDMA SCHEDULER: Topologia scoperta - " 
+              << adjacency.size() << " nodi, " 
+              << nodeMacAddress.size() << " MAC address" << std::endl;
+}
+
 void TDMAScheduler::discoverFlowsFromNetwork() {
     cModule *network = getParentModule(); 
+    
+    std::cout << "TDMA SCHEDULER: Acquisizione flussi..." << std::endl;
     
     // Itera su tutti i nodi della rete
     for (cModule::SubmoduleIterator it(network); !it.end(); ++it) {
@@ -83,43 +183,89 @@ void TDMAScheduler::discoverFlowsFromNetwork() {
         for (cModule::SubmoduleIterator appIt(node); !appIt.end(); ++appIt) {
             cModule *app = *appIt;
             
-            // Verifica se è una senderApp configurata
+            // Verifica se e' una senderApp configurata
             if (std::string(app->getName()) == "senderApp" && app->hasPar("flowId")) {
                 std::string fid = app->par("flowId").stringValue();
                 if (fid.empty()) continue; 
 
                 Flow flow;
                 flow.id = fid;
-                flow.src = node->getName(); // Es. "LD1"
+                flow.src = node->getName();
                 flow.srcMac = app->par("srcAddr").stringValue();
                 flow.dstMac = app->par("dstAddr").stringValue();
                 
-                // Leggi parametri aggiunti nel NED/INI
                 flow.payload = app->par("payloadSize").intValue();
                 flow.period = SimTime(app->par("period").doubleValue());
                 flow.priority = app->par("priority").intValue();
                 flow.fragmentCount = app->par("burstSize").intValue();
                 flow.isFragmented = flow.fragmentCount > 1;
 
-                // Gestione Destinazione (Multicast vs Unicast) per il routing
+                // Gestione Destinazione (Multicast vs Unicast)
                 if (app->hasPar("destinations") && std::string(app->par("destinations").stringValue()) != "") {
-                    // Multicast: legge lista nodi (es. "S1,S2,S3")
                     flow.dst = app->par("destinations").stringValue();
                 } else if (app->hasPar("dstNode")) {
-                    // Unicast: legge nome nodo (es. "CU")
                     flow.dst = app->par("dstNode").stringValue();
                 } else {
-                    // Fallback 
-                    EV_WARN << "Flow " << fid << " senza dstNode o destinations configurato!" << endl;
+                    EV_WARN << "Flow " << fid << " senza dstNode o destinations!" << endl;
                     flow.dst = "UNKNOWN";
                 }
 
                 flows.push_back(flow);
-                EV << "Flow Trovato: " << flow.id << " [Src:" << flow.src 
-                   << " -> Dst:" << flow.dst << "] Period:" << flow.period << endl;
+                EV << "Flow: " << flow.id << " [" << flow.src 
+                   << " -> " << flow.dst << "] Period:" << flow.period << endl;
             }
         }
     }
+    
+    std::cout << "TDMA SCHEDULER: " << flows.size() << " flussi trovati" << std::endl;
+}
+
+std::vector<std::string> TDMAScheduler::getPathTo(const std::string& src, const std::string& dst) {
+    // Controlla cache
+    auto cacheKey = std::make_pair(src, dst);
+    if (pathCache.find(cacheKey) != pathCache.end()) {
+        return pathCache[cacheKey];
+    }
+    
+    // BFS per trovare il path piu' breve
+    std::queue<std::string> q;
+    std::map<std::string, std::string> parent;
+    
+    q.push(src);
+    parent[src] = "";
+    
+    while (!q.empty()) {
+        std::string curr = q.front();
+        q.pop();
+        
+        if (curr == dst) {
+            // Ricostruisci path
+            std::vector<std::string> path;
+            for (std::string n = dst; !n.empty(); n = parent[n]) {
+                path.push_back(n);
+            }
+            std::reverse(path.begin(), path.end());
+            
+            // Salva in cache
+            pathCache[cacheKey] = path;
+            return path;
+        }
+        
+        // Esplora vicini
+        if (adjacency.find(curr) != adjacency.end()) {
+            for (const auto& neighborPair : adjacency[curr]) {
+                const std::string& neighbor = neighborPair.first;
+                if (parent.find(neighbor) == parent.end()) {
+                    parent[neighbor] = curr;
+                    q.push(neighbor);
+                }
+            }
+        }
+    }
+    
+    // Path non trovato
+    EV_ERROR << "Path non trovato: " << src << " -> " << dst << endl;
+    return {};
 }
 
 void TDMAScheduler::generateOptimizedSchedule() {
@@ -169,23 +315,20 @@ void TDMAScheduler::generateOptimizedSchedule() {
         return a.releaseTime < b.releaseTime;
     });
 
-    // Variabili per progress bar
-        int totalJobs = jobs.size();
-        EV << "Jobs totali da schedulare: " << totalJobs << endl;
-        std::cout << "Jobs da schedulare: " << totalJobs << std::endl;
-        int processed = 0;
-        int lastPercent = -1;
+    int totalJobs = jobs.size();
+    EV << "Jobs totali da schedulare: " << totalJobs << endl;
+    std::cout << "Jobs da schedulare: " << totalJobs << std::endl;
+    int processed = 0;
+    int lastPercent = -1;
 
     // Scheduling
     for (const auto& job : jobs) {
-
-        // Output progresso su console
-                processed++;
-                int percent = (processed * 100) / totalJobs;
-                if (percent % 10 == 0 && percent != lastPercent) {
-                    std::cout << "Scheduling... " << percent << "%" << std::endl;
-                    lastPercent = percent;
-                }
+        processed++;
+        int percent = (processed * 100) / totalJobs;
+        if (percent % 10 == 0 && percent != lastPercent) {
+            std::cout << "Scheduling... " << percent << "%" << std::endl;
+            lastPercent = percent;
+        }
 
         simtime_t t = job.releaseTime;
         bool scheduled = false;
@@ -256,9 +399,7 @@ simtime_t TDMAScheduler::calculateTxTime(int payloadBytes) {
 void TDMAScheduler::configureSenders() {
     cModule *network = getParentModule();
 
-    // Per ogni flusso trovato, configura l'app corrispondente
     for (const auto& flow : flows) {
-        // Cerca il modulo sorgente e la senderApp specifica
         cModule* node = network->getSubmodule(flow.src.c_str());
         if (!node) continue;
 
@@ -267,7 +408,6 @@ void TDMAScheduler::configureSenders() {
             if (std::string(app->getName()) == "senderApp" && 
                 std::string(app->par("flowId").stringValue()) == flow.id) {
                 
-                // Raccogli slot
                 std::stringstream offsets;
                 bool first = true;
                 std::vector<simtime_t> flowSlots;
@@ -285,168 +425,124 @@ void TDMAScheduler::configureSenders() {
                     first = false;
                 }
                 
-                // Scrivi risultati
                 app->par("tdmaSlots").setStringValue(offsets.str());
                 app->par("txDuration").setDoubleValue(flow.txTime.dbl());
                 app->par("hyperperiod").setDoubleValue(hyperperiod.dbl());
-                
-                
             }
         }
     }
 }
 
 void TDMAScheduler::configureSwitches() {
-    
     std::map<std::string, std::map<std::string, std::string>> switchTables;
     
-    // per popolare la tabella
-    auto addEntry = [&](std::string sw, std::string mac, int port) {
+    // Lambda per aggiungere entry
+    auto addEntry = [&](const std::string& sw, const std::string& mac, int port) {
         std::string pStr = std::to_string(port);
-        if (switchTables[sw][mac].empty()) switchTables[sw][mac] = pStr;
-        else if (switchTables[sw][mac].find(pStr) == std::string::npos) 
+        if (switchTables[sw][mac].empty()) {
+            switchTables[sw][mac] = pStr;
+        } else if (switchTables[sw][mac].find(pStr) == std::string::npos) {
             switchTables[sw][mac] += ";" + pStr;
+        }
     };
-
-    // NOTA: Qui mantengo la tua configurazione statica delle porte perché 
-    // il routing automatico sugli switch richiederebbe di conoscere la topologia delle porte.
-    // Se vuoi renderlo dinamico, servirebbe una funzione "discoverTopology".
-    // Per ora, copio la tua configurazione manuale che è corretta per lo scenario fisso.
     
-    // Switch 1
-    addEntry("switch1", "00:00:00:00:00:05", 0); // S1
-    addEntry("switch1", "00:00:00:00:00:03", 1); // LD1
-    addEntry("switch1", "00:00:00:00:00:07", 2); // CU
-    addEntry("switch1", "00:00:00:00:00:0A", 2); // LD2
-    addEntry("switch1", "00:00:00:00:00:08", 2); // S2
-    addEntry("switch1", "00:00:00:00:00:0B", 3); // ME
-    addEntry("switch1", "00:00:00:00:00:0D", 3); // S3
-    addEntry("switch1", "00:00:00:00:00:11", 2); // S4
-    addEntry("switch1", "00:00:00:00:00:06", 4); // HU
-    addEntry("switch1", "00:00:00:00:00:02", 5); // US1
-    addEntry("switch1", "00:00:00:00:00:09", 2); // US2
-    addEntry("switch1", "00:00:00:00:00:10", 2); // US3
-    addEntry("switch1", "00:00:00:00:00:0C", 3); // US4
-    addEntry("switch1", "00:00:00:00:00:04", 6); // CM1
-    addEntry("switch1", "00:00:00:00:00:01", 7); // TLM
-    addEntry("switch1", "00:00:00:00:00:12", 2); // RS1
-    addEntry("switch1", "00:00:00:00:00:0E", 3); // RS2
-    addEntry("switch1", "00:00:00:00:00:0F", 2); // RC
-    addEntry("switch1", "multicast", 0);
-    addEntry("switch1", "multicast", 2);
-
-    // Switch 2
-    addEntry("switch2", "00:00:00:00:00:08", 1); 
-    addEntry("switch2", "00:00:00:00:00:0A", 2); 
-    addEntry("switch2", "00:00:00:00:00:07", 3); 
-    addEntry("switch2", "00:00:00:00:00:03", 0); 
-    addEntry("switch2", "00:00:00:00:00:05", 0); 
-    addEntry("switch2", "00:00:00:00:00:0B", 0); 
-    addEntry("switch2", "00:00:00:00:00:0D", 0); 
-    addEntry("switch2", "00:00:00:00:00:11", 4); 
-    addEntry("switch2", "00:00:00:00:00:06", 0); 
-    addEntry("switch2", "00:00:00:00:00:02", 0); 
-    addEntry("switch2", "00:00:00:00:00:09", 5); 
-    addEntry("switch2", "00:00:00:00:00:10", 4); 
-    addEntry("switch2", "00:00:00:00:00:0C", 0); 
-    addEntry("switch2", "00:00:00:00:00:04", 0); 
-    addEntry("switch2", "00:00:00:00:00:01", 0); 
-    addEntry("switch2", "00:00:00:00:00:12", 4); 
-    addEntry("switch2", "00:00:00:00:00:0E", 0); 
-    addEntry("switch2", "00:00:00:00:00:0F", 4); 
-    addEntry("switch2", "multicast", 1);
-    addEntry("switch2", "multicast", 4);
-
-    // Switch 3
-    addEntry("switch3", "00:00:00:00:00:0B", 0); 
-    addEntry("switch3", "00:00:00:00:00:0D", 2); 
-    addEntry("switch3", "00:00:00:00:00:05", 1); 
-    addEntry("switch3", "00:00:00:00:00:08", 1); 
-    addEntry("switch3", "00:00:00:00:00:11", 3); 
-    addEntry("switch3", "00:00:00:00:00:03", 1); 
-    addEntry("switch3", "00:00:00:00:00:0A", 1); 
-    addEntry("switch3", "00:00:00:00:00:07", 1); 
-    addEntry("switch3", "00:00:00:00:00:02", 1); 
-    addEntry("switch3", "00:00:00:00:00:09", 1); 
-    addEntry("switch3", "00:00:00:00:00:10", 3); 
-    addEntry("switch3", "00:00:00:00:00:0C", 4); 
-    addEntry("switch3", "00:00:00:00:00:04", 1); 
-    addEntry("switch3", "00:00:00:00:00:12", 3); 
-    addEntry("switch3", "00:00:00:00:00:0E", 5); 
-    addEntry("switch3", "00:00:00:00:00:01", 1); 
-    addEntry("switch3", "00:00:00:00:00:0F", 3); 
-    addEntry("switch3", "00:00:00:00:00:06", 1); 
-    addEntry("switch3", "multicast", 1);
-    addEntry("switch3", "multicast", 2);
-    addEntry("switch3", "multicast", 3);
-    addEntry("switch3", "multicast", 5);
-
-    // Switch 4
-    addEntry("switch4", "00:00:00:00:00:11", 2); 
-    addEntry("switch4", "00:00:00:00:00:0B", 1); 
-    addEntry("switch4", "00:00:00:00:00:0D", 1); 
-    addEntry("switch4", "00:00:00:00:00:05", 0); 
-    addEntry("switch4", "00:00:00:00:00:08", 0); 
-    addEntry("switch4", "00:00:00:00:00:03", 0); 
-    addEntry("switch4", "00:00:00:00:00:0A", 0); 
-    addEntry("switch4", "00:00:00:00:00:07", 0); 
-    addEntry("switch4", "00:00:00:00:00:02", 0); 
-    addEntry("switch4", "00:00:00:00:00:09", 0); 
-    addEntry("switch4", "00:00:00:00:00:10", 3); 
-    addEntry("switch4", "00:00:00:00:00:0C", 1); 
-    addEntry("switch4", "00:00:00:00:00:04", 0); 
-    addEntry("switch4", "00:00:00:00:00:12", 5); 
-    addEntry("switch4", "00:00:00:00:00:0E", 1); 
-    addEntry("switch4", "00:00:00:00:00:01", 0); 
-    addEntry("switch4", "00:00:00:00:00:0F", 4); 
-    addEntry("switch4", "00:00:00:00:00:06", 0); 
-    addEntry("switch4", "multicast", 2);
-    addEntry("switch4", "multicast", 5);
-
-    // Applica configurazione
-    for (const auto& [switchName, macTable] : switchTables) {
-        cModule* sw = getModuleByPath(switchName.c_str());
+    // Per ogni switch nella topologia
+    for (const auto& adjEntry : adjacency) {
+        const std::string& nodeName = adjEntry.first;
+        
+        // Solo switch
+        if (nodeName.find("switch") == std::string::npos) continue;
+        
+        // Per ogni MAC address nella rete
+        for (const auto& macEntry : nodeMacAddress) {
+            const std::string& targetNode = macEntry.first;
+            const std::string& targetMac = macEntry.second;
+            
+            // Salta se stesso (switch non hanno MAC nella nostra mappa)
+            if (targetNode == nodeName) continue;
+            
+            // Trova path da questo switch al nodo target
+            std::vector<std::string> path = getPathTo(nodeName, targetNode);
+            if (path.size() < 2) continue;
+            
+            // Il primo hop dopo lo switch indica la direzione
+            std::string nextHop = path[1];
+            
+            // Trova la porta locale verso nextHop
+            for (const auto& neighborPair : adjacency[nodeName]) {
+                if (neighborPair.first == nextHop) {
+                    addEntry(nodeName, targetMac, neighborPair.second);
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Gestione multicast: raccogli tutte le destinazioni multicast dai flow
+    // e aggiungi entry "multicast" con le porte necessarie
+    std::set<std::string> multicastDestinations;
+    for (const auto& flow : flows) {
+        if (flow.dstMac == "multicast") {
+            // Parse destinazioni
+            std::stringstream ss(flow.dst);
+            std::string d;
+            while (std::getline(ss, d, ',')) {
+                multicastDestinations.insert(d);
+            }
+        }
+    }
+    
+    // Per ogni switch, aggiungi porte multicast
+    if (!multicastDestinations.empty()) {
+        for (const auto& adjEntry : adjacency) {
+            const std::string& switchName = adjEntry.first;
+            if (switchName.find("switch") == std::string::npos) continue;
+            
+            std::set<int> multicastPorts;
+            
+            for (const std::string& dest : multicastDestinations) {
+                std::vector<std::string> path = getPathTo(switchName, dest);
+                if (path.size() < 2) continue;
+                
+                std::string nextHop = path[1];
+                
+                for (const auto& neighborPair : adjacency[switchName]) {
+                    if (neighborPair.first == nextHop) {
+                        multicastPorts.insert(neighborPair.second);
+                        break;
+                    }
+                }
+            }
+            
+            // Aggiungi tutte le porte multicast
+            for (int port : multicastPorts) {
+                addEntry(switchName, "multicast", port);
+            }
+        }
+    }
+    
+    // Applica configurazione agli switch
+    for (const auto& tableEntry : switchTables) {
+        const std::string& switchName = tableEntry.first;
+        cModule* sw = getParentModule()->getSubmodule(switchName.c_str());
         if (!sw) continue;
+        
         std::stringstream config;
         bool first = true;
-        for (const auto& [mac, ports] : macTable) {
+        for (const auto& macPortEntry : tableEntry.second) {
             if (!first) config << ",";
-            config << mac << "->" << ports;
+            config << macPortEntry.first << "->" << macPortEntry.second;
             first = false;
         }
+        
         sw->par("macTableConfig").setStringValue(config.str());
+        EV << "Switch " << switchName << " MAC table: " << config.str() << endl;
     }
-}
-
-std::vector<std::string> TDMAScheduler::getPathTo(const std::string& src, const std::string& dst) {
-    // Mappa per il routing logico (Nome Nodo -> Nome Nodo)
-    std::map<std::pair<std::string, std::string>, std::vector<std::string>> pathMap = {
-        {{"LD1", "CU"}, {"LD1", "switch1", "switch2", "CU"}},
-        {{"LD2", "CU"}, {"LD2", "switch2", "CU"}},
-        {{"US1", "CU"}, {"US1", "switch1", "switch2", "CU"}},
-        {{"US2", "CU"}, {"US2", "switch2", "CU"}},
-        {{"US3", "CU"}, {"US3", "switch4", "switch2", "CU"}},
-        {{"US4", "CU"}, {"US4", "switch3", "switch1", "switch2", "CU"}},
-        {{"CU", "HU"}, {"CU", "switch2", "switch1", "HU"}},
-        {{"CM1", "HU"}, {"CM1", "switch1", "HU"}},
-        {{"RC", "HU"}, {"RC", "switch4", "switch2", "switch1", "HU"}},
-        {{"TLM", "HU"}, {"TLM", "switch1", "HU"}},
-        {{"TLM", "CU"}, {"TLM", "switch1", "switch2", "CU"}},
-        // Multicast destinations
-        {{"ME", "S1"}, {"ME", "switch3", "switch1", "S1"}},
-        {{"ME", "S2"}, {"ME", "switch3", "switch1", "switch2", "S2"}},
-        {{"ME", "S3"}, {"ME", "switch3", "S3"}},
-        {{"ME", "S4"}, {"ME", "switch3", "switch4", "S4"}},
-        {{"ME", "RS1"}, {"ME", "switch3", "switch4", "RS1"}},
-        {{"ME", "RS2"}, {"ME", "switch3", "RS2"}},
-    };
     
-    if (pathMap.find({src, dst}) != pathMap.end()) {
-        return pathMap[{src, dst}];
-    }
-    return {}; // Path non trovato
+    std::cout << "TDMA SCHEDULER: MAC table configurate per " 
+              << switchTables.size() << " switch" << std::endl;
 }
 
 void TDMAScheduler::handleMessage(cMessage *msg) {
-    delete msg; //Non serve gestire message qui, TDMA in questa fase è offline, lascio perché è obbligatoria per CSimpleModule
+    delete msg;
 }

@@ -51,6 +51,18 @@ private:
     std::vector<Flow> flows;
     std::vector<Slot> schedule;
     
+    // Topologia dinamica (popolata una sola volta in initialize)
+    // Grafo: nodo -> lista di (nodo_vicino, porta_locale)
+    std::map<std::string, std::vector<std::pair<std::string, int>>> adjacency;
+    
+    // MAC address per nodo EndSystem
+    std::map<std::string, std::string> nodeMacAddress;
+    
+    // Cache dei path calcolati (src,dst) -> path
+    std::map<std::pair<std::string, std::string>, std::vector<std::string>> pathCache;
+    
+    // Discovery e setup
+    void discoverTopology();         // Legge topologia dal NED
     void discoverFlowsFromNetwork(); // Legge i parametri .ini dai moduli
     void generateOptimizedSchedule();// Algoritmo EDF pipelined
     void configureSenders();         // Inietta slot nei TDMASenderApp
