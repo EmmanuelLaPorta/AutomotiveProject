@@ -115,11 +115,6 @@ void TDMASwitch::processAndForward(TDMAFrame *frame, int arrivalPort) {
     EV << getName() << ": " << srcMac << " -> " << dstMac 
        << " (port " << arrivalPort << ")" << endl;
     
-    // MAC learning (opzionale, la tabella e gia configurata)
-    if (macTable.find(srcMac) == macTable.end()) {
-        macTable[srcMac] = {arrivalPort};
-        EV << "  [Learning] " << srcMac << " -> port " << arrivalPort << endl;
-    }
 
     // Lookup destinazione
     std::vector<int> destPorts;
@@ -132,8 +127,6 @@ void TDMASwitch::processAndForward(TDMAFrame *frame, int arrivalPort) {
             if (i != arrivalPort) destPorts.push_back(i);
         }
     }
-    
-    int priority = getPriority(frame);
 
     // Inoltra su tutte le porte destinazione
     for (int destPort : destPorts) {
@@ -141,18 +134,13 @@ void TDMASwitch::processAndForward(TDMAFrame *frame, int arrivalPort) {
         
         TDMAFrame *copy = frame->dup();
         
-        portQueues[destPort][priority].push(copy);
+        portQueues[destPort].push(copy);
         
-        // Calcola dimensione totale coda
-        int totalQSize = 0;
-        for(auto const& [prio, q] : portQueues[destPort]) {
-            totalQSize += q.size();
+        int qSize = portQueues[destPort].size();
+        if (qSize > maxQueueDepth[destPort]) {
+            maxQueueDepth[destPort] = qSize;
         }
-        
-        if (totalQSize > maxQueueDepth[destPort]) {
-            maxQueueDepth[destPort] = totalQSize;
-        }
-        emit(registerSignal("queueLength"), totalQSize);
+        emit(registerSignal("queueLength"), qSize);
         
         if (!portBusy[destPort]) {
             transmitFrame(destPort);
@@ -162,47 +150,27 @@ void TDMASwitch::processAndForward(TDMAFrame *frame, int arrivalPort) {
     delete frame;
 }
 
-// Trasmette frame a priorita piu alta dalla coda
+// Trasmette frame dalla coda FIFO
 void TDMASwitch::transmitFrame(int port) {
     if (portBusy[port]) return;
-
-    for (int prio = 0; prio <= 7; prio++) {
-        if (!portQueues[port][prio].empty()) {
-            cPacket *frame = portQueues[port][prio].front();
-            portQueues[port][prio].pop();
-            
-            portBusy[port] = true;
-            
-            uint64_t bits = frame->getBitLength();
-            simtime_t txTime = SimTime((double)bits / tdma::DATARATE, SIMTIME_S);
-            
-            EV_DEBUG << "Tx prio " << prio << " port " << port 
-                     << " (" << bits << " bits)" << endl;
-            
-            send(frame, "port$o", port);
-            
-            cMessage *txComplete = new cMessage("TxComplete");
-            txComplete->setKind(port);
-            scheduleAt(simTime() + txTime, txComplete);
-            
-            return;
-        }
+    
+    if (!portQueues[port].empty()) {
+        cPacket *frame = portQueues[port].front();
+        portQueues[port].pop();
+        
+        portBusy[port] = true;
+        
+        uint64_t bits = frame->getBitLength();
+        simtime_t txTime = SimTime((double)bits / tdma::DATARATE, SIMTIME_S);
+        
+        EV_DEBUG << "Tx port " << port << " (" << bits << " bits)" << endl;
+        
+        send(frame, "port$o", port);
+        
+        cMessage *txComplete = new cMessage("TxComplete");
+        txComplete->setKind(port);
+        scheduleAt(simTime() + txTime, txComplete);
     }
-}
-
-// Mappa flowId a livello priorita
-int TDMASwitch::getPriority(TDMAFrame *frame) {
-    std::string fid = frame->getFlowId();
-    
-    if (fid.find("flow2") != std::string::npos) return 0;  // Audio
-    if (fid.find("flow7") != std::string::npos) return 1;  // Telematics
-    if (fid.find("flow3") != std::string::npos) return 2;  // Sensors
-    if (fid.find("flow4") != std::string::npos) return 3;  // Control
-    if (fid.find("flow6") != std::string::npos) return 4;  // Video RSE
-    if (fid.find("flow5") != std::string::npos) return 5;  // Camera front
-    if (fid.find("flow8") != std::string::npos) return 5;  // Camera rear
-    
-    return 7;  // Best effort
 }
 
 void TDMASwitch::finish() {

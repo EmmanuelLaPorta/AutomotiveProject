@@ -1,4 +1,3 @@
-
 #ifndef TDMA_SWITCH_H
 #define TDMA_SWITCH_H
 
@@ -19,8 +18,8 @@ protected:
     // MAC -> lista porte uscita (multicast supportato)
     std::map<std::string, std::vector<int>> macTable;
     
-    // Code per porta e priorita: port -> priority -> queue
-    std::map<int, std::map<int, std::queue<cPacket*>>> portQueues;
+    // Coda FIFO per porta
+    std::map<int, std::queue<cPacket*>> portQueues;
     
     std::map<int, bool> portBusy;
     std::map<int, int> maxQueueDepth;
@@ -35,7 +34,6 @@ private:
     void handleSelfMessage(cMessage *msg);
     void processAndForward(TDMAFrame *frame, int arrivalPort);
     void transmitFrame(int port);
-    int getPriority(TDMAFrame *frame);
 };
 
 #endif

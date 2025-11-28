@@ -50,6 +50,8 @@ void TDMAScheduler::initialize() {
     hyperperiod = par("hyperperiod");
     datarate = par("datarate").doubleValue();
     guardTime = par("guardTime").doubleValue();
+    switchDelay = par("switchDelay").doubleValue();
+    propagationDelay = par("propagationDelay").doubleValue();
 
     // Reset strutture
     flows.clear();
@@ -58,8 +60,6 @@ void TDMAScheduler::initialize() {
     adjacency.clear();
     nodeMacAddress.clear();
     pathCache.clear();
-
-    try { tdma::setGuardTime(guardTime); } catch (...) {}
 
     std::cout << "TDMA SCHEDULER: Inizializzazione..." << std::endl;
 
@@ -122,7 +122,7 @@ void TDMAScheduler::discoverTopology() {
         
         if (nodeName == "tdmaScheduler") continue;
         
-        // Controlla se e' uno switch (lo riconosco perché ha gate array "port")
+        // Controlla se e' uno switch (lo riconosco perche' ha gate array "port")
         bool isSwitch = (nodeName.find("switch") != std::string::npos);
         
         if (isSwitch) {
@@ -356,12 +356,12 @@ void TDMAScheduler::generateOptimizedSchedule() {
                     std::string v = path[i+1];
                     std::string linkId = u + "->" + v;
                     
-                    if (i > 0) hopTime += tdma::getSwitchDelay();
+                    if (i > 0) hopTime += switchDelay;
                     
                     if (linkArrivals.find(linkId) == linkArrivals.end()) 
                         linkArrivals[linkId] = hopTime;
                     
-                    hopTime += job.txDuration + tdma::getPropagationDelay();
+                    hopTime += job.txDuration + propagationDelay;
                 }
             }
 

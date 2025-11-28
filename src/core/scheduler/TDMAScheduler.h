@@ -19,7 +19,7 @@ public:
         std::string dstMac;       
         simtime_t period;         // Periodo di trasmissione
         int payload;              // Payload del frammento in byte
-        int priority;             // Priorità EDF (0=max)
+        int priority;             // Priorita EDF (0=max)
         std::vector<std::string> path;  
         simtime_t txTime;         // Tempo TX calcolato
         bool isFragmented = false;
@@ -47,6 +47,8 @@ private:
     simtime_t hyperperiod;
     double datarate;
     double guardTime;
+    double switchDelay;
+    double propagationDelay;
     
     std::vector<Flow> flows;
     std::vector<Slot> schedule;
