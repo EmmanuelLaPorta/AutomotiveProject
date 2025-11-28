@@ -19,8 +19,6 @@ public:
         std::string dstMac;       
         simtime_t period;         // Periodo di trasmissione
         int payload;              // Payload del frammento in byte
-        int priority;             // Priorita EDF (0=max)
-        std::vector<std::string> path;  
         simtime_t txTime;         // Tempo TX calcolato
         bool isFragmented = false;
         int fragmentCount = 1;    // Numero frammenti

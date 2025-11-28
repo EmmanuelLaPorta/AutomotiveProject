@@ -26,7 +26,6 @@ struct Job {
     simtime_t releaseTime;
     simtime_t deadline;
     simtime_t txDuration;
-    int priority;
     int fragmentIndex;
     std::vector<std::string> destinations;
 };
@@ -196,7 +195,6 @@ void TDMAScheduler::discoverFlowsFromNetwork() {
                 
                 flow.payload = app->par("payloadSize").intValue();
                 flow.period = SimTime(app->par("period").doubleValue());
-                flow.priority = app->par("priority").intValue();
                 flow.fragmentCount = app->par("burstSize").intValue();
                 flow.isFragmented = flow.fragmentCount > 1;
 
@@ -300,7 +298,6 @@ void TDMAScheduler::generateOptimizedSchedule() {
                 job.releaseTime = release;
                 job.deadline = deadline;
                 job.txDuration = txTime;
-                job.priority = flow.priority;
                 job.fragmentIndex = k;
                 job.destinations = destinations;
                 jobs.push_back(job);
@@ -311,7 +308,6 @@ void TDMAScheduler::generateOptimizedSchedule() {
     // Ordinamento EDF
     std::sort(jobs.begin(), jobs.end(), [](const Job& a, const Job& b) {
         if (a.deadline != b.deadline) return a.deadline < b.deadline;
-        if (a.priority != b.priority) return a.priority < b.priority;
         return a.releaseTime < b.releaseTime;
     });
 

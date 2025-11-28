@@ -14,7 +14,6 @@ protected:
     std::string dstAddr;        // MAC specifico o "multicast"
     int payloadSize;            // Byte per frammento
     int burstSize;              // Frammenti totali (per header)
-    int numDestinations;        // Destinazioni multicast
     simtime_t txDuration;
     
     std::vector<simtime_t> txSlots;  // Offset slot da scheduler

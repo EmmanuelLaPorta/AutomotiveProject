@@ -11,8 +11,7 @@ void TDMASenderApp::initialize() {
     srcAddr = par("srcAddr").stringValue();
     dstAddr = par("dstAddr").stringValue();
     payloadSize = par("payloadSize");
-    burstSize = par("burstSize"); 
-    numDestinations = par("numDestinations");
+    burstSize = par("burstSize");
     
     // Parse slot list dal parametro
     std::string slotsStr = par("tdmaSlots").stringValue();
