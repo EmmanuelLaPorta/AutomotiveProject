@@ -6,12 +6,14 @@ import tdma.nodes.EndSystem;
 import tdma.switch.TDMASwitch;
 import ned.DatarateChannel;
 
-network FullAutomotiveNetwork {
+network FullAutomotiveNetwork
+{
     parameters:
         @display("bgb=1200,800");
 
     types:
-        channel GigabitEthernet extends DatarateChannel {
+        channel GigabitEthernet extends DatarateChannel
+        {
             datarate = 1Gbps;
             delay = 10ns;
         }
@@ -22,44 +24,146 @@ network FullAutomotiveNetwork {
         }
 
         // Switch (4 zone veicolo)
-        switch1: TDMASwitch { numPorts = 8; @display("p=300,300"); }  // Anteriore SX
-        switch2: TDMASwitch { numPorts = 6; @display("p=700,300"); }  // Anteriore DX
-        switch3: TDMASwitch { numPorts = 6; @display("p=300,500"); }  // Posteriore SX
-        switch4: TDMASwitch { numPorts = 6; @display("p=700,500"); }  // Posteriore DX
+        switch1: TDMASwitch {
+            numPorts = 8;
+            @display("p=262,486");
+        }  // Anteriore SX
+        switch2: TDMASwitch {
+            numPorts = 6;
+            @display("p=262,203");
+        }  // Anteriore DX
+        switch3: TDMASwitch {
+            numPorts = 6;
+            @display("p=957,486");
+        }  // Posteriore SX
+        switch4: TDMASwitch {
+            numPorts = 6;
+            @display("p=957,203");
+        }  // Posteriore DX
 
         // LiDAR frontali
-        LD1: EndSystem { numSenders = 1; numReceivers = 0; macAddress = "00:00:00:00:00:03"; @display("p=200,200"); }
-        LD2: EndSystem { numSenders = 1; numReceivers = 0; macAddress = "00:00:00:00:00:0A"; @display("p=800,200"); }
+        LD1: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:03";
+            @display("p=103,487");
+        }
+        LD2: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:0A";
+            @display("p=103,80");
+        }
 
         // Control Unit e Head Unit
-        CU: EndSystem { numSenders = 1; numReceivers = 1; macAddress = "00:00:00:00:00:07"; @display("p=800,400"); }
-        HU: EndSystem { numSenders = 0; numReceivers = 1; macAddress = "00:00:00:00:00:06"; @display("p=200,300"); }
+        CU: EndSystem {
+            numSenders = 1;
+            numReceivers = 1;
+            macAddress = "00:00:00:00:00:07";
+            @display("p=320,317");
+        }
+        HU: EndSystem {
+            numSenders = 0;
+            numReceivers = 1;
+            macAddress = "00:00:00:00:00:06";
+            @display("p=542,317");
+        }
 
         // Media Entertainment
-        ME: EndSystem { numSenders = 2; numReceivers = 0; macAddress = "00:00:00:00:00:0B"; @display("p=200,600"); }
+        ME: EndSystem {
+            numSenders = 2;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:0B";
+            @display("p=846,563");
+        }
 
         // Speaker (4)
-        S1: EndSystem { numSenders = 0; numReceivers = 1; macAddress = "00:00:00:00:00:05"; @display("p=200,400"); }
-        S2: EndSystem { numSenders = 0; numReceivers = 1; macAddress = "00:00:00:00:00:08"; @display("p=800,300"); }
-        S3: EndSystem { numSenders = 0; numReceivers = 1; macAddress = "00:00:00:00:00:0D"; @display("p=200,500"); }
-        S4: EndSystem { numSenders = 0; numReceivers = 1; macAddress = "00:00:00:00:00:11"; @display("p=800,600"); }
+        S1: EndSystem {
+            numSenders = 0;
+            numReceivers = 1;
+            macAddress = "00:00:00:00:00:05";
+            @display("p=405,415");
+        }
+        S2: EndSystem {
+            numSenders = 0;
+            numReceivers = 1;
+            macAddress = "00:00:00:00:00:08";
+            @display("p=405,256");
+        }
+        S3: EndSystem {
+            numSenders = 0;
+            numReceivers = 1;
+            macAddress = "00:00:00:00:00:0D";
+            @display("p=846,415");
+        }
+        S4: EndSystem {
+            numSenders = 0;
+            numReceivers = 1;
+            macAddress = "00:00:00:00:00:11";
+            @display("p=846,256");
+        }
 
         // Sensori ultrasuoni (4)
-        US1: EndSystem { numSenders = 1; numReceivers = 0; macAddress = "00:00:00:00:00:02"; @display("p=150,200"); }
-        US2: EndSystem { numSenders = 1; numReceivers = 0; macAddress = "00:00:00:00:00:09"; @display("p=900,200"); }
-        US3: EndSystem { numSenders = 1; numReceivers = 0; macAddress = "00:00:00:00:00:10"; @display("p=800,700"); }
-        US4: EndSystem { numSenders = 1; numReceivers = 0; macAddress = "00:00:00:00:00:0C"; @display("p=150,700"); }
+        US1: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:02";
+            @display("p=103,645");
+        }
+        US2: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:09";
+            @display("p=103,203");
+        }
+        US3: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:10";
+            @display("p=1066,203");
+        }
+        US4: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:0C";
+            @display("p=1045,626");
+        }
 
         // Camere
-        CM1: EndSystem { numSenders = 1; numReceivers = 0; macAddress = "00:00:00:00:00:04"; @display("p=100,150"); }
-        RC: EndSystem { numSenders = 1; numReceivers = 0; macAddress = "00:00:00:00:00:0F"; @display("p=800,700"); }
+        CM1: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:04";
+            @display("p=122,379");
+        }
+        RC: EndSystem {
+            numSenders = 1;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:0F";
+            @display("p=1013,301");
+        }
 
         // Telematics
-        TLM: EndSystem { numSenders = 2; numReceivers = 0; macAddress = "00:00:00:00:00:01"; @display("p=100,250"); }
+        TLM: EndSystem {
+            numSenders = 2;
+            numReceivers = 0;
+            macAddress = "00:00:00:00:00:01";
+            @display("p=262,626");
+        }
 
         // Rear Seat Entertainment
-        RS1: EndSystem { numSenders = 0; numReceivers = 1; macAddress = "00:00:00:00:00:12"; @display("p=900,600"); }
-        RS2: EndSystem { numSenders = 0; numReceivers = 1; macAddress = "00:00:00:00:00:0E"; @display("p=200,600"); }
+        RS1: EndSystem {
+            numSenders = 0;
+            numReceivers = 1;
+            macAddress = "00:00:00:00:00:12";
+            @display("p=722,256");
+        }
+        RS2: EndSystem {
+            numSenders = 0;
+            numReceivers = 1;
+            macAddress = "00:00:00:00:00:0E";
+            @display("p=722,402");
+        }
 
     connections:
         // Switch 1

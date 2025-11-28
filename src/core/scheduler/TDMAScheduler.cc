@@ -1,4 +1,4 @@
-// Implementazione scheduler con discovery dinamica della topologia
+// Implementazione scheduler
 #include "TDMAScheduler.h"
 #include "../common/Constants.h" 
 #include <algorithm>
@@ -63,16 +63,16 @@ void TDMAScheduler::initialize() {
 
     std::cout << "TDMA SCHEDULER: Inizializzazione..." << std::endl;
 
-    // 1. Discovery topologia dalla rete NED (una sola volta)
+    // Discovery topologia dalla rete NED
     discoverTopology();
     
-    // 2. Leggo configurazione flussi dall'ambiente (INI/NED)
+    // Leggo configurazione flussi
     discoverFlowsFromNetwork();
     
-    // 3. Calcolo tabella di scheduling
+    // Calcolo tabella di scheduling
     generateOptimizedSchedule();
     
-    // 4. Distribuisco configurazione
+    // Distribuisco configurazione
     configureSenders();
     configureSwitches();
     
@@ -84,7 +84,7 @@ void TDMAScheduler::discoverTopology() {
     
     std::cout << "TDMA SCHEDULER: Discovery topologia..." << std::endl;
     
-    // Prima passata: raccogli tutti i nodi e i loro MAC address
+    // Raccogli tutti i nodi e i loro MAC address
     for (cModule::SubmoduleIterator it(network); !it.end(); ++it) {
         cModule *node = *it;
         std::string nodeName = node->getName();
@@ -105,7 +105,7 @@ void TDMAScheduler::discoverTopology() {
         adjacency[nodeName] = {};
     }
     
-    // Lambda per risalire al modulo di rete (salta submodule interni come "mac")
+    // Lambda per risalire al modulo di rete (serve a saltare i moduli interni)
     auto getNetworkModule = [network](cModule *mod) -> cModule* {
         if (!mod) return nullptr;
         // Risali finche' il parent non e' la rete
@@ -115,14 +115,14 @@ void TDMAScheduler::discoverTopology() {
         return (mod->getParentModule() == network) ? mod : nullptr;
     };
     
-    // Seconda passata: scopri le connessioni navigando le gate
+    // Scopri le connessioni navigando le gate
     for (cModule::SubmoduleIterator it(network); !it.end(); ++it) {
         cModule *node = *it;
         std::string nodeName = node->getName();
         
         if (nodeName == "tdmaScheduler") continue;
         
-        // Controlla se e' uno switch (ha gate array "port")
+        // Controlla se e' uno switch (lo riconosco perché ha gate array "port")
         bool isSwitch = (nodeName.find("switch") != std::string::npos);
         
         if (isSwitch) {

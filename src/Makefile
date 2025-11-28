@@ -37,12 +37,10 @@ OBJS = \
     $O/nodes/components/applications/TDMASenderApp.o \
     $O/nodes/components/mac/TDMAMac.o \
     $O/switch/TDMASwitch.o \
-    $O/messages/AppPacket_m.o \
     $O/messages/TDMAFrame_m.o
 
 # Message files
 MSGFILES = \
-    messages/AppPacket.msg \
     messages/TDMAFrame.msg
 
 # SM files

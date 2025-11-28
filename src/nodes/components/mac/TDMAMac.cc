@@ -11,6 +11,7 @@ void TDMAMac::initialize() {
     
     datarate = par("datarate").doubleValue();
     macAddress = par("macAddress").stringValue();
+    currentRxFrame = nullptr;
     
     txState = TX_IDLE;
     rxState = RX_IDLE;

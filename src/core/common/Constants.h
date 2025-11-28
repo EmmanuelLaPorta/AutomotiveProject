@@ -9,8 +9,8 @@
 
 namespace tdma {
 
-// Livelli di priorita per scheduling EDF (servono come tie-breaker nel caso in cui in EDF c'è la stessa priorità)
-// 0 = massima priorita (safety-critical), 7 = minima (best-effort)
+// Livelli di priorità per scheduling EDF (servono come tie-breaker nel caso in cui in EDF c'è la stessa priorità)
+// 0 = max priorità, 7 = min
 const int PRIO_CRITICAL_SAFETY = 0;
 const int PRIO_CONTROL = 3;
 const int PRIO_INFOTAINMENT = 6;
